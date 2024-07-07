@@ -1,0 +1,56 @@
+name: Tests
+
+permissions:
+  contents: read
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - "src/*"
+      - "tests/*"
+      - ".github/workflows/tests.yml"
+  push:
+    paths:
+      - "src/*"
+      - "tests/*"
+      - ".github/workflows/tests.yml"
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Test
+    runs-on: ${{matrix.os}}-latest
+    strategy:
+      matrix:
+        os: [macos, ubuntu, windows]
+    steps:
+    - uses: actions/checkout@v4
+    - uses: actions-rs/toolchain@v1
+    - run: cargo test --workspace --no-default-features
+    - run: cargo test --workspace
+    - run: cargo test --workspace --all-features
+
+  check:
+    name: Check on Rust ${{matrix.rust}}${{format(' ({0})', matrix.target || matrix.os)}}
+    runs-on: ${{matrix.os}}-latest
+    strategy:
+      matrix:
+        os: [macos, ubuntu, windows]
+        rust: [stable, beta, nightly]
+    env:
+      target: ${{matrix.target && format('--target={0}', matrix.target)}}
+      workspace: ${{matrix.no-workspace || '--workspace'}}
+    steps:
+    - uses: actions/checkout@v4
+    - uses: actions-rs/toolchain@v1
+      with:
+        toolchain: ${{matrix.rust}}
+        profile: minimal
+        target: ${{matrix.target}}
+    - run: cargo +${{matrix.rust}} check ${{env.target}} ${{env.workspace}} --no-default-features
+    - run: cargo +${{matrix.rust}} check ${{env.target}} ${{env.workspace}}
+    - run: cargo +${{matrix.rust}} check ${{env.target}} ${{env.workspace}} --all-features
