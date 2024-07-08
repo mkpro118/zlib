@@ -12,8 +12,6 @@ on:
       - ".github/workflows/tests.yml"
   push:
     paths:
-      - "src/*"
-      - "tests/*"
       - ".github/workflows/tests.yml"
 
 concurrency:
