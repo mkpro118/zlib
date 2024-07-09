@@ -137,7 +137,15 @@ fn inflate(reader: &mut BitReader) -> Result<Vec<u8>, String> {
 }
 
 #[allow(unused_variables)]
-fn inflate_block_no_compression(reader: &mut BitReader, buffer: &mut Vec<u8>) {}
+fn inflate_block_no_compression(reader: &mut BitReader, buffer: &mut Vec<u8>) {
+    // Length of the data
+    let len = reader.read_bytes(2);
+
+    // One's complement of the length of the data
+    let nlen = reader.read_bytes(2);
+
+    buffer.extend((0..len).map(|_| reader.read_byte()));
+}
 
 #[allow(unused_variables)]
 fn inflate_block_fixed(reader: &mut BitReader, buffer: &mut Vec<u8>) {}
