@@ -90,6 +90,20 @@ pub fn decompress(input: &[u8]) -> Result<(), String> {
         ));
     }
 
+    // FLGS is the compression FLAGS
+    let flags = reader.read_byte();
+    let cmf_flags_checksum = ((cmf as usize) * 256 + (flags as usize)) % 31;
+
+    if cmf_flags_checksum != 0 {
+        return Err("CMF + FLAGS checksum failed!".to_owned());
+    }
+
+    let fdict = (flags >> 5) & 1;
+
+    if fdict != 0 {
+        return Err("Preset dictionaries are not supported".to_owned());
+    }
+
     Ok(())
 }
 
