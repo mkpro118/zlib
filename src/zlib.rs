@@ -7,7 +7,7 @@ struct BitReader<'a> {
     mem: &'a [u8],
     pos: usize,
     byte: u8,
-    numbits: usize,
+    numbits: isize,
 }
 
 impl<'a> BitReader<'a> {
