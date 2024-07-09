@@ -81,6 +81,15 @@ pub fn decompress(input: &[u8]) -> Result<(), String> {
         return Err(format!("CM = {cm} is not a supported compression method"));
     }
 
+    // CINFO is the Compression INFOrmation
+    let cinfo = (cmf >> 4) & 0b1111;
+
+    if cinfo > 7 {
+        return Err(format!(
+            "Invalid compression info, must be < 7, found {cinfo}"
+        ));
+    }
+
     Ok(())
 }
 
