@@ -159,4 +159,52 @@ mod tests {
             assert!(res.is_err());
         }
     }
+
+    #[test]
+    fn test_decompress_checksum() {
+        // 0111 -> CINFO
+        // 1110 -> CM
+        let mut input: [u8; 2] = [0b0111_1000, 0];
+        let known_cm_value = (input[0] as usize) * 256;
+
+        // Check all possible u8 values
+        for mut i in u8::MIN..u8::MAX {
+            // Need to set the FDICT bit to 0, yes this wastes 32 iterations
+            // but its not noticeable, plus this is a test
+            i &= 0b1101_1111;
+            input[1] = i;
+            let checksum = known_cm_value + (i as usize);
+            let res = decompress(&input);
+
+            // Ensure the checksum is not divisible by 31
+            // If it is, skip that iteration
+            if checksum % 31 == 0 {
+                assert!(res.is_ok());
+            } else {
+                assert!(res.is_err());
+            }
+        }
+    }
+
+    #[test]
+    fn test_decompress_fdict_set() {
+        // 0111 -> CINFO
+        // 1110 -> CM
+        let mut input: [u8; 2] = [0b0111_1000, 0];
+        let known_cm_value = (input[0] as usize) * 256;
+
+        // Check all possible u8 values
+        for mut i in u8::MIN..u8::MAX {
+            // Need to set the FDICT bit to 1 to force an error
+            i |= 0b0010_0000;
+            input[1] = i;
+            let checksum = known_cm_value + (i as usize);
+            if checksum % 31 != 0 {
+                continue;
+            }
+
+            let res = decompress(&input);
+            assert!(res.is_err());
+        }
+    }
 }
