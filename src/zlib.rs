@@ -105,7 +105,7 @@ pub fn decompress(input: &[u8]) -> Result<Vec<u8>, String> {
     }
 
     // Inflate the data
-    let inflated = inflate(&mut reader);
+    let inflated = inflate(&mut reader)?;
 
     // We ignore the checksum
     let _adler32 = reader.read_bytes(4);
@@ -113,9 +113,37 @@ pub fn decompress(input: &[u8]) -> Result<Vec<u8>, String> {
     Ok(inflated)
 }
 
-fn inflate(_reader: &mut BitReader) -> Vec<u8> {
-    vec![0u8]
+fn inflate(reader: &mut BitReader) -> Result<Vec<u8>, String> {
+    let mut buffer: Vec<u8> = vec![];
+
+    let mut final_block = false;
+
+    while !final_block {
+        final_block = match reader.read_bit() {
+            0 => false,
+            1 => true,
+            _ => unreachable!(),
+        };
+
+        match reader.read_bits(2) {
+            0 => inflate_block_no_compression(reader, &mut buffer),
+            1 => inflate_block_fixed(reader, &mut buffer),
+            2 => inflate_block_dynamic(reader, &mut buffer),
+            _ => return Err("Invalid block type".to_owned()),
+        };
+    }
+
+    Ok(buffer)
 }
+
+#[allow(unused_variables)]
+fn inflate_block_no_compression(reader: &mut BitReader, buffer: &mut Vec<u8>) {}
+
+#[allow(unused_variables)]
+fn inflate_block_fixed(reader: &mut BitReader, buffer: &mut Vec<u8>) {}
+
+#[allow(unused_variables)]
+fn inflate_block_dynamic(reader: &mut BitReader, buffer: &mut Vec<u8>) {}
 
 #[cfg(test)]
 mod tests {
