@@ -1,6 +1,9 @@
 // Inspired from: https://pyokagan.name/blog/2019-10-18-zlibinflate/
 
 #![allow(dead_code)]
+#![allow(clippy::missing_errors_doc)]
+#![allow(clippy::missing_panics_doc)]
+#![allow(missing_docs)]
 
 #[derive(Debug)]
 struct BitReader<'a> {
@@ -62,6 +65,23 @@ impl<'a> BitReader<'a> {
 
         out
     }
+}
+
+pub fn decompress(input: &[u8]) -> Result<(), String> {
+    let mut reader = BitReader::new(input);
+
+    // CMF is Compression Method and information Field
+    let cmf = reader.read_byte();
+
+    // CM is the Compression Method
+    let cm = cmf & 0b1111;
+
+    // We only support CM = 8, i.e compressed with DEFLATE
+    if cm != 8 {
+        return Err(format!("CM = {cm} is not a supported compression method"));
+    }
+
+    Ok(())
 }
 
 #[cfg(test)]
