@@ -67,7 +67,7 @@ impl<'a> BitReader<'a> {
     }
 }
 
-pub fn decompress(input: &[u8]) -> Result<(), String> {
+pub fn decompress(input: &[u8]) -> Result<Vec<u8>, String> {
     let mut reader = BitReader::new(input);
 
     // CMF is Compression Method and information Field
@@ -104,7 +104,17 @@ pub fn decompress(input: &[u8]) -> Result<(), String> {
         return Err("Preset dictionaries are not supported".to_owned());
     }
 
-    Ok(())
+    // Inflate the data
+    let inflated = inflate(&mut reader);
+
+    // We ignore the checksum
+    let _adler32 = reader.read_bytes(4);
+
+    Ok(inflated)
+}
+
+fn inflate(_reader: &mut BitReader) -> Vec<u8> {
+    vec![0u8]
 }
 
 #[cfg(test)]
@@ -162,9 +172,12 @@ mod tests {
 
     #[test]
     fn test_decompress_checksum() {
-        // 0111 -> CINFO
-        // 1110 -> CM
-        let mut input: [u8; 2] = [0b0111_1000, 0];
+        // Need data to be at least 6 bytes for adler32 checksum
+        let mut input: [u8; 6] = [0; 6];
+
+        // 0111 -> CINFO, 1110 -> CM
+        input[0] = 0b0111_1000;
+
         let known_cm_value = (input[0] as usize) * 256;
 
         // Check all possible u8 values
@@ -188,9 +201,12 @@ mod tests {
 
     #[test]
     fn test_decompress_fdict_set() {
-        // 0111 -> CINFO
-        // 1110 -> CM
-        let mut input: [u8; 2] = [0b0111_1000, 0];
+        // Need data to be at least 6 bytes for adler32 checksum
+        let mut input: [u8; 6] = [0; 6];
+
+        // 0111 -> CINFO, 1110 -> CM
+        input[0] = 0b0111_1000;
+
         let known_cm_value = (input[0] as usize) * 256;
 
         // Check all possible u8 values
