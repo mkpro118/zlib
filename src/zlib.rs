@@ -100,14 +100,10 @@ mod tests {
     #[test]
     fn test_read_bit() {
         let mut reader = BitReader::new(b"\x9d");
-        assert_eq!(reader.read_bit(), 1);
-        assert_eq!(reader.read_bit(), 0);
-        assert_eq!(reader.read_bit(), 1);
-        assert_eq!(reader.read_bit(), 1);
-        assert_eq!(reader.read_bit(), 1);
-        assert_eq!(reader.read_bit(), 0);
-        assert_eq!(reader.read_bit(), 0);
-        assert_eq!(reader.read_bit(), 1);
+        let expected_bits: [u8; 8] = [1, 0, 1, 1, 1, 0, 0, 1];
+        for &bit in &expected_bits {
+            assert_eq!(reader.read_bit(), bit);
+        }
     }
 
     #[test]
