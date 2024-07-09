@@ -121,4 +121,32 @@ mod tests {
         let mut reader = BitReader::new(b"\x66\x36");
         assert_eq!(reader.read_bytes(2), 13926);
     }
+
+    #[test]
+    fn test_decompress_invalid_cm() {
+        // Set CInfo correctly
+        let initial = 0b0111_0000u8;
+        for i in 0u8..8u8 {
+            let input = [initial | i];
+            let res = decompress(&input);
+            assert!(&res.is_err());
+        }
+
+        for i in 9u8..=15u8 {
+            let input = [initial | i];
+            let res = decompress(&input);
+            assert!(&res.is_err());
+        }
+    }
+
+    #[test]
+    fn test_decompress_invalid_cinfo() {
+        // Set CM correctly
+        let initial = 0b1000u8;
+        for i in 8u8..=15u8 {
+            let input = [initial | (i << 4)];
+            let res = decompress(&input);
+            assert!(res.is_err());
+        }
+    }
 }
