@@ -200,11 +200,14 @@ mod tests {
 
     #[test]
     fn test_decompress_checksum() {
-        // Need data to be at least 6 bytes for adler32 checksum
-        let mut input: [u8; 6] = [0; 6];
+        // Need data to be at least 7 bytes for adler32 checksum and final block
+        let mut input: [u8; 7] = [0; 7];
 
         // 0111 -> CINFO, 1110 -> CM
         input[0] = 0b0111_1000;
+
+        // Set the very first data block as final.
+        input[2] = 0b0000_0001;
 
         let known_cm_value = (input[0] as usize) * 256;
 
@@ -229,11 +232,14 @@ mod tests {
 
     #[test]
     fn test_decompress_fdict_set() {
-        // Need data to be at least 6 bytes for adler32 checksum
-        let mut input: [u8; 6] = [0; 6];
+        // Need data to be at least 7 bytes for adler32 checksum and final block
+        let mut input: [u8; 7] = [0; 7];
 
         // 0111 -> CINFO, 1110 -> CM
         input[0] = 0b0111_1000;
+
+        // Set the very first data block as final.
+        input[2] = 0b0000_0001;
 
         let known_cm_value = (input[0] as usize) * 256;
 
