@@ -84,14 +84,14 @@ impl HuffmanTree {
             node = match reader.read_bit() {
                 0 => {
                     if let Some(next) = &node.left {
-                        &next
+                        next
                     } else {
                         return None;
                     }
                 }
                 1 => {
                     if let Some(next) = &node.right {
-                        &next
+                        next
                     } else {
                         return None;
                     }
