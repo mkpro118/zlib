@@ -659,6 +659,29 @@ mod tests {
     }
 
     #[test]
+    fn test_huffman_tree_from_bitlen_list() {
+        let tree =
+            HuffmanTree::from_bitlen_list(&[2, 1, 3, 3], &['A', 'B', 'C', 'D']);
+
+        let data = [
+            TestData(0b0_0_0_10_110_111, 11, &['B', 'B', 'B', 'A', 'C', 'D']),
+            TestData(0b0_10_0_110_111_0, 11, &['B', 'A', 'B', 'C', 'D', 'B']),
+            TestData(0b10_0_110_111, 9, &['A', 'B', 'C', 'D']),
+        ];
+
+        struct TestData(usize, usize, &'static [char]);
+
+        for TestData(code, length, expected_symbols) in data {
+            let bytes = code_to_bytes(code, length);
+            let mut reader = BitReader::new(&bytes);
+
+            for &symbol in expected_symbols {
+                assert_eq!(tree.decode(&mut reader), Some(symbol));
+            }
+        }
+    }
+
+    #[test]
     fn test_inflate_block_data_end_marker() {
         let mut literal_tree = HuffmanTree::new();
         let distance_tree = HuffmanTree::new();
