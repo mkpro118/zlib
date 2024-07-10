@@ -511,10 +511,14 @@ mod tests {
     }
 
     #[test]
-    #[ignore = "This test will fail as long as inflation is not fully implemented. This has been tested in earlier revisions. Ignore while Inflation if a WIP"]
     fn test_decompress_checksum() {
-        // Need data to be at least 7 bytes for adler32 checksum and final block
-        let mut input: [u8; 7] = [0; 7];
+        // Need data to be at least 11 bytes
+        // 2 -> Metadata
+        // 1 -> Block Information
+        // 2 + 2 -> Block Length + Block Length One's Complement
+        // 4 bytes for Adler checksum
+        // 2 + 1 + 2 + 2 + 4 = 11
+        let mut input: [u8; 11] = [0; 11];
 
         // 0111 -> CINFO, 1110 -> CM
         input[0] = 0b0111_1000;
