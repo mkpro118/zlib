@@ -627,4 +627,114 @@ mod tests {
             assert!(res.is_err());
         }
     }
+
+    #[test]
+    fn test_inflate_block_data_end_marker() {
+        let mut literal_tree = HuffmanTree::new();
+        let distance_tree = HuffmanTree::new();
+        let mut buffer: Vec<u8> = vec![];
+
+        let (code, length) = (0b1, 1);
+        literal_tree.insert(code, length, '\u{100}');
+        let bytes = code_to_bytes(code, length);
+        let mut reader = BitReader::new(&bytes);
+
+        inflate_block_data(
+            &mut reader,
+            &literal_tree,
+            &distance_tree,
+            &mut buffer,
+        );
+
+        assert_eq!(buffer.len(), 0);
+    }
+
+    #[test]
+    fn test_inflate_block_data_literals() {
+        let mut literal_tree = HuffmanTree::new();
+        let distance_tree = HuffmanTree::new();
+        let mut buffer: Vec<u8> = vec![];
+
+        literal_tree.insert(0b10, 2, 'A');
+        literal_tree.insert(0b0, 1, 'B');
+        literal_tree.insert(0b110, 3, 'C');
+
+        // End marker
+        literal_tree.insert(0b111, 3, '\u{100}');
+
+        let (code, length) = (0b10_0_10_110_111, 11);
+        let bytes = code_to_bytes(code, length);
+        let mut reader = BitReader::new(&bytes);
+
+        inflate_block_data(
+            &mut reader,
+            &literal_tree,
+            &distance_tree,
+            &mut buffer,
+        );
+
+        assert_eq!(buffer.len(), 4);
+        assert_eq!(buffer, &[b'A', b'B', b'A', b'C']);
+    }
+
+    #[test]
+    fn test_inflate_block_data_distance() {
+        let mut literal_tree = HuffmanTree::new();
+        let mut distance_tree = HuffmanTree::new();
+
+        literal_tree.insert(0b10, 2, 'A');
+        literal_tree.insert(0b0, 1, 'B');
+
+        // Insert 257
+        literal_tree.insert(0b110, 3, '\u{101}');
+
+        // End marker
+        literal_tree.insert(0b111, 3, '\u{100}');
+
+        // Simply use the smallest possible value
+        distance_tree.insert(0b10, 2, 0 as char);
+        distance_tree.insert(0b0, 1, 1 as char);
+        distance_tree.insert(0b110, 3, 2 as char);
+
+        struct TestData(usize, usize, usize, &'static [u8]);
+
+        let data = [
+            // A B A 257 0 *END*
+            // This should repeat the last A 3 more times, overall, "ABAAAA"
+            TestData(
+                0b10_0_10_110_10_111,
+                13,
+                6,
+                &[b'A', b'B', b'A', b'A', b'A', b'A'],
+            ),
+            // A B 257 1 *END*
+            // This should repeat the "AB" once, and end with an "A",
+            // overall, "ABABA"
+            TestData(0b10_0_110_0_111, 10, 5, &[b'A', b'B', b'A', b'B', b'A']),
+            // A B A 257 2 *END*
+            // This should repeat the "ABA" once, overall, "ABAABA"
+            TestData(
+                0b10_0_10_110_110_111,
+                14,
+                6,
+                &[b'A', b'B', b'A', b'A', b'B', b'A'],
+            ),
+        ];
+
+        for TestData(code, length, exp_len, exp_seq) in data {
+            let bytes = code_to_bytes(code, length);
+            let mut reader = BitReader::new(&bytes);
+            let mut buffer: Vec<u8> = vec![];
+
+            inflate_block_data(
+                &mut reader,
+                &literal_tree,
+                &distance_tree,
+                &mut buffer,
+            );
+
+            assert_eq!(buffer.len(), exp_len);
+            assert_eq!(buffer, exp_seq);
+        }
+    }
 }
