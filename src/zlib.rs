@@ -409,4 +409,50 @@ mod tests {
             }
         }
     }
+
+    #[test]
+    fn test_huffman_tree_insertion() {
+        let mut tree = HuffmanTree::new();
+        {
+            tree.insert(0b1, 1, b'B');
+
+            assert!(tree.root.left.is_none());
+            assert!(tree.root.right.is_some());
+            assert!(tree.root.right.as_ref().unwrap().symbol.is_some());
+            assert_eq!(tree.root.right.as_ref().unwrap().symbol.unwrap(), b'B');
+        }
+
+        {
+            tree.insert(0b01, 2, b'A');
+
+            assert!(tree.root.left.is_some());
+            let left = tree.root.left.as_ref().unwrap();
+
+            assert!(left.symbol.is_none());
+            assert!(left.right.is_some());
+            assert!(left.right.as_ref().unwrap().symbol.is_some());
+            assert_eq!(left.right.as_ref().unwrap().symbol.unwrap(), b'A');
+        }
+
+        {
+            tree.insert(0b000, 3, b'C');
+            tree.insert(0b001, 3, b'D');
+
+            assert!(tree.root.left.is_some());
+            let left = tree.root.left.as_ref().unwrap();
+
+            assert!(left.left.is_some());
+            let left = left.left.as_ref().unwrap();
+
+            // Check 'C'
+            assert!(left.left.is_some());
+            assert!(left.left.as_ref().unwrap().symbol.is_some());
+            assert_eq!(left.left.as_ref().unwrap().symbol.unwrap(), b'C');
+
+            // Check 'D'
+            assert!(left.right.is_some());
+            assert!(left.right.as_ref().unwrap().symbol.is_some());
+            assert_eq!(left.right.as_ref().unwrap().symbol.unwrap(), b'D');
+        }
+    }
 }
