@@ -10,12 +10,12 @@ use crate::zlib::bitwriter::BitWriter;
 const MAX_WINDOW_SIZE: usize = 1 << 15; // 32 KB
 
 #[derive(Debug)]
-pub struct LZ77 {
+pub struct LZ77Compressor {
     window_size: usize,
     lookahead_buffer_size: usize,
 }
 
-impl LZ77 {
+impl LZ77Compressor {
     pub fn new() -> Self {
         Self {
             window_size: MAX_WINDOW_SIZE,
@@ -147,7 +147,7 @@ mod tests {
 
     #[test]
     fn test_new() {
-        let lz77 = LZ77::new();
+        let lz77 = LZ77Compressor::new();
 
         assert_eq!(lz77.window_size, MAX_WINDOW_SIZE);
         assert_eq!(lz77.lookahead_buffer_size, MAX_WINDOW_SIZE / 2);
@@ -156,7 +156,7 @@ mod tests {
     #[test]
     fn test_with_window_size() {
         for size in 32..64 {
-            let lz77 = LZ77::with_window_size(size);
+            let lz77 = LZ77Compressor::with_window_size(size);
 
             assert_eq!(lz77.window_size, size);
             assert_eq!(lz77.lookahead_buffer_size, size / 2);
@@ -165,7 +165,7 @@ mod tests {
 
     #[test]
     fn test_set_window_size() {
-        let mut lz77 = LZ77::new();
+        let mut lz77 = LZ77Compressor::new();
 
         for size in 32..64 {
             lz77.set_window_size(size);
@@ -176,7 +176,7 @@ mod tests {
 
     #[test]
     fn test_set_lookahead_buffer_size() {
-        let mut lz77 = LZ77::new();
+        let mut lz77 = LZ77Compressor::new();
 
         for size in 32..64 {
             lz77.set_lookahead_buffer_size(size);
@@ -189,27 +189,28 @@ mod tests {
     #[should_panic]
     fn test_set_lookahead_buffer_size_bad_input1() {
         let size = 64;
-        LZ77::with_window_size(size).set_lookahead_buffer_size(size);
+        LZ77Compressor::with_window_size(size).set_lookahead_buffer_size(size);
     }
 
     #[test]
     #[should_panic]
     fn test_set_lookahead_buffer_size_bad_input2() {
         let size = 64;
-        LZ77::with_window_size(size).set_lookahead_buffer_size(size + 1);
+        LZ77Compressor::with_window_size(size)
+            .set_lookahead_buffer_size(size + 1);
     }
 
     #[test]
     #[should_panic]
     fn test_set_search_buffer_size_bad_input1() {
         let size = 64;
-        LZ77::with_window_size(size).set_search_buffer_size(size);
+        LZ77Compressor::with_window_size(size).set_search_buffer_size(size);
     }
 
     #[test]
     #[should_panic]
     fn test_set_search_buffer_size_bad_input2() {
         let size = 64;
-        LZ77::with_window_size(size).set_search_buffer_size(size + 1);
+        LZ77Compressor::with_window_size(size).set_search_buffer_size(size + 1);
     }
 }
