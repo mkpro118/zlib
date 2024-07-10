@@ -67,6 +67,30 @@ impl<'a> BitReader<'a> {
     }
 }
 
+/// Encodes a code that is `length` bits long into bytes that is conformant
+/// with DEFLATE spec
+fn code_to_bytes(code: usize, length: usize) -> Vec<u8> {
+    let mut bytes: Vec<u8> = vec![0u8];
+
+    let mut numbits = 0;
+
+    for i in (0..length).rev() {
+        if numbits >= 8 {
+            bytes.push(0u8);
+            numbits = 0;
+        }
+
+        let Some(last) = bytes.last_mut() else {
+            unreachable!();
+        };
+
+        *last |= u8::from(code & (1 << i) != 0) << numbits;
+        numbits += 1;
+    }
+
+    bytes
+}
+
 pub fn decompress(input: &[u8]) -> Result<Vec<u8>, String> {
     let mut reader = BitReader::new(input);
 
