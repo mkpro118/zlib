@@ -6,19 +6,20 @@
 #![allow(missing_docs)]
 
 static LENGTH_EXTRA_BITS: [usize; 29] = [
-    0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3, 4, 4, 4, 4, 5, 5, 5, 5, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3, 4, 4, 4, 4, 5,
+    5, 5, 5, 0,
 ];
 static LENGTH_BASE: [usize; 29] = [
-    3, 4, 5, 6, 7, 8, 9, 10, 11, 13, 15, 17, 19, 23, 27, 31, 35, 43, 51, 59, 67, 83, 99, 115, 131,
-    163, 195, 227, 258,
+    3, 4, 5, 6, 7, 8, 9, 10, 11, 13, 15, 17, 19, 23, 27, 31, 35, 43, 51, 59,
+    67, 83, 99, 115, 131, 163, 195, 227, 258,
 ];
 static DISTANCE_EXTRA_BITS: [usize; 30] = [
-    0, 0, 0, 0, 1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6, 7, 7, 8, 8, 9, 9, 10, 10, 11, 11, 12, 12, 13,
-    13,
+    0, 0, 0, 0, 1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6, 7, 7, 8, 8, 9, 9, 10, 10,
+    11, 11, 12, 12, 13, 13,
 ];
 static DISTANCE_BASE: [usize; 30] = [
-    1, 2, 3, 4, 5, 7, 9, 13, 17, 25, 33, 49, 65, 97, 129, 193, 257, 385, 513, 769, 1025, 1537,
-    2049, 3073, 4097, 6145, 8193, 12289, 16385, 24577,
+    1, 2, 3, 4, 5, 7, 9, 13, 17, 25, 33, 49, 65, 97, 129, 193, 257, 385, 513,
+    769, 1025, 1537, 2049, 3073, 4097, 6145, 8193, 12289, 16385, 24577,
 ];
 
 #[derive(Debug)]
@@ -405,11 +406,21 @@ mod tests {
             TestData(b"\x0c\x00\xf3\xffHello World!"),
             TestData(b"\x05\x00\xfa\xffRust!"),
             TestData(b"\x1d\x00\xe2\xffInflate Block No Compression!"),
-            TestData(b"\x2c\x00\xd3\xffBeneath the starlit sky, dreams take flight."),
-            TestData(b"\x2b\x00\xd4\xffWhispers of the wind carry ancient secrets."),
-            TestData(b"\x2b\x00\xd4\xffIn the heart of the forest, magic is alive."),
-            TestData(b"\x28\x00\xd7\xffTime flows like a river, never stopping."),
-            TestData(b"\x2b\x00\xd4\xffEchoes of laughter fill the empty hallways."),
+            TestData(
+                b"\x2c\x00\xd3\xffBeneath the starlit sky, dreams take flight.",
+            ),
+            TestData(
+                b"\x2b\x00\xd4\xffWhispers of the wind carry ancient secrets.",
+            ),
+            TestData(
+                b"\x2b\x00\xd4\xffIn the heart of the forest, magic is alive.",
+            ),
+            TestData(
+                b"\x28\x00\xd7\xffTime flows like a river, never stopping.",
+            ),
+            TestData(
+                b"\x2b\x00\xd4\xffEchoes of laughter fill the empty hallways.",
+            ),
         ];
 
         for TestData(compressed) in data {
@@ -513,13 +524,21 @@ mod tests {
         let data = [
             TestData(0b1_1_1_01_000_001, 11, &['B', 'B', 'B', 'A', 'C', 'D']),
             TestData(0b000_1_001_01, 9, &['C', 'B', 'D', 'A']),
-            TestData(0b01_1_001_01_001_000, 14, &['A', 'B', 'D', 'A', 'D', 'C']),
+            TestData(
+                0b01_1_001_01_001_000,
+                14,
+                &['A', 'B', 'D', 'A', 'D', 'C'],
+            ),
             TestData(
                 0b01_001_1_001_000_1_01_000,
                 18,
                 &['A', 'D', 'B', 'D', 'C', 'B', 'A', 'C'],
             ),
-            TestData(0b000_001_01_1_001_01, 14, &['C', 'D', 'A', 'B', 'D', 'A']),
+            TestData(
+                0b000_001_01_1_001_01,
+                14,
+                &['C', 'D', 'A', 'B', 'D', 'A'],
+            ),
         ];
 
         for TestData(code, length, expected_symbols) in data {
