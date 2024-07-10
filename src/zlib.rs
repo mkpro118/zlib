@@ -279,9 +279,11 @@ fn inflate_block_no_compression(reader: &mut BitReader, buffer: &mut Vec<u8>) {
     buffer.extend((0..len).map(|_| reader.read_byte()));
 }
 
+#[allow(clippy::ptr_arg)]
 #[allow(unused_variables)]
 fn inflate_block_fixed(reader: &mut BitReader, buffer: &mut Vec<u8>) {}
 
+#[allow(clippy::ptr_arg)]
 #[allow(unused_variables)]
 fn inflate_block_dynamic(reader: &mut BitReader, buffer: &mut Vec<u8>) {}
 
