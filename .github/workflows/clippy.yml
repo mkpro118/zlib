@@ -1,9 +1,11 @@
+name: Clippy
+
 on:
   push:
     branches:
       - main
 
-name: Clippy
+permissions: write-all
 
 jobs:
   clippy:
