@@ -13,6 +13,36 @@ struct BitReader<'a> {
     numbits: isize,
 }
 
+#[derive(Debug)]
+struct HuffmanTreeNode {
+    symbol: Option<u8>,
+    left: Option<Box<HuffmanTreeNode>>,
+    right: Option<Box<HuffmanTreeNode>>,
+}
+
+#[derive(Debug)]
+struct HuffmanTree {
+    root: HuffmanTreeNode,
+}
+
+impl HuffmanTreeNode {
+    fn new() -> Self {
+        Self {
+            symbol: None,
+            left: None,
+            right: None,
+        }
+    }
+}
+
+impl HuffmanTree {
+    fn new() -> Self {
+        Self {
+            root: HuffmanTreeNode::new(),
+        }
+    }
+}
+
 impl<'a> BitReader<'a> {
     pub fn new(mem: &'a [u8]) -> Self {
         Self {
