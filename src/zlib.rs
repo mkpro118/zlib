@@ -481,4 +481,87 @@ mod tests {
             assert_eq!(left.right.as_ref().unwrap().symbol.unwrap(), b'D');
         }
     }
+
+    #[test]
+    fn test_huffman_tree_decode_good() {
+        let mut tree = HuffmanTree::new();
+        tree.insert(0b1, 1, b'B');
+        tree.insert(0b01, 2, b'A');
+        tree.insert(0b000, 3, b'C');
+        tree.insert(0b001, 3, b'D');
+
+        struct TestData(usize, usize, &'static [u8]);
+
+        // The underscored are placed to separate the bits as their
+        // encoded characters
+        let data = [
+            TestData(
+                0b1_1_1_01_000_001,
+                11,
+                &[b'B', b'B', b'B', b'A', b'C', b'D'],
+            ),
+            TestData(0b000_1_001_01, 9, &[b'C', b'B', b'D', b'A']),
+            TestData(
+                0b01_1_001_01_001_000,
+                14,
+                &[b'A', b'B', b'D', b'A', b'D', b'C'],
+            ),
+            TestData(
+                0b01_001_1_001_000_1_01_000,
+                18,
+                &[b'A', b'D', b'B', b'D', b'C', b'B', b'A', b'C'],
+            ),
+            TestData(
+                0b000_001_01_1_001_01,
+                14,
+                &[b'C', b'D', b'A', b'B', b'D', b'A'],
+            ),
+        ];
+
+        for TestData(code, length, expected_symbols) in data {
+            let bytes = code_to_bytes(code, length);
+            let mut reader = BitReader::new(&bytes);
+
+            for &symbol in expected_symbols {
+                assert_eq!(tree.decode(&mut reader), Some(symbol));
+            }
+        }
+    }
+
+    #[test]
+    fn test_huffman_tree_decode_bad() {
+        let mut tree = HuffmanTree::new();
+        tree.insert(0b1, 1, b'B');
+        tree.insert(0b01, 2, b'A');
+        tree.insert(0b000, 3, b'C');
+        tree.insert(0b001, 3, b'D');
+
+        struct TestData(usize, usize, usize);
+
+        // The underscored are placed to separate the bits as their
+        // encoded characters
+        let data = [
+            TestData(0b01_001_1_0, 7, 3),
+            TestData(0b1_000_000_000_01_01_0, 15, 6),
+        ];
+
+        for TestData(code, length, n_good_iters) in data {
+            let bytes = code_to_bytes(code, length);
+
+            let res = std::panic::catch_unwind(|| {
+                let mut reader = BitReader::new(&bytes);
+
+                // Run through the good iterations
+                for _ in 0..n_good_iters {
+                    let x = tree.decode(&mut reader);
+                    assert!(x.is_some());
+                }
+
+                // This should cause a panic
+                tree.decode(&mut reader);
+            });
+
+            assert!(res.is_err());
+        }
+    }
 }
