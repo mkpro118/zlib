@@ -119,6 +119,34 @@ impl HuffmanTree {
 
         node.symbol
     }
+
+    fn from_bitlen_list(bitlen: &[usize], alphabet: &[char]) -> Self {
+        let max_bits = *bitlen.iter().max().unwrap_or(&0);
+        let bitlen_count: Vec<usize> = (0..=max_bits)
+            .map(|y| {
+                if y == 0 {
+                    0
+                } else {
+                    bitlen.iter().filter(|&x| *x == y).count()
+                }
+            })
+            .collect();
+
+        let mut next_code = (1..max_bits).fold(vec![0, 0], |mut acc, bits| {
+            acc.push((acc[bits] + bitlen_count[bits]) << 1);
+            acc
+        });
+
+        bitlen
+            .iter()
+            .zip(alphabet.iter())
+            .filter(|(&bl, _)| bl != 0)
+            .fold(Self::new(), |mut tree, (&bl, &c)| {
+                tree.insert(next_code[bl], bl, c);
+                next_code[bl] += 1;
+                tree
+            })
+    }
 }
 
 impl<'a> BitReader<'a> {
