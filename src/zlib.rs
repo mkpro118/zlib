@@ -291,6 +291,7 @@ fn distance_tree_alphabet() -> Vec<char> {
 
 /// Encodes a code that is `length` bits long into bytes that is conformant
 /// with DEFLATE spec
+#[allow(dead_code)] // Used in tests
 fn code_to_bytes(code: usize, length: usize) -> Vec<u8> {
     let mut bytes: Vec<u8> = vec![0u8];
 
