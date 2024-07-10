@@ -15,7 +15,7 @@ struct BitReader<'a> {
 
 #[derive(Debug)]
 struct HuffmanTreeNode {
-    symbol: Option<u8>,
+    symbol: Option<char>,
     left: Option<Box<HuffmanTreeNode>>,
     right: Option<Box<HuffmanTreeNode>>,
 }
@@ -42,7 +42,7 @@ impl HuffmanTree {
         }
     }
 
-    fn insert(&mut self, code: usize, length: usize, symbol: u8) {
+    fn insert(&mut self, code: usize, length: usize, symbol: char) {
         let mut node = &mut self.root;
 
         for i in (0..length).rev() {
@@ -77,7 +77,7 @@ impl HuffmanTree {
         node.symbol = Some(symbol);
     }
 
-    fn decode(&self, reader: &mut BitReader) -> Option<u8> {
+    fn decode(&self, reader: &mut BitReader) -> Option<char> {
         let mut node = &self.root;
 
         while node.left.is_some() || node.right.is_some() {
@@ -440,16 +440,16 @@ mod tests {
     fn test_huffman_tree_insertion() {
         let mut tree = HuffmanTree::new();
         {
-            tree.insert(0b1, 1, b'B');
+            tree.insert(0b1, 1, 'B');
 
             assert!(tree.root.left.is_none());
             assert!(tree.root.right.is_some());
             assert!(tree.root.right.as_ref().unwrap().symbol.is_some());
-            assert_eq!(tree.root.right.as_ref().unwrap().symbol.unwrap(), b'B');
+            assert_eq!(tree.root.right.as_ref().unwrap().symbol.unwrap(), 'B');
         }
 
         {
-            tree.insert(0b01, 2, b'A');
+            tree.insert(0b01, 2, 'A');
 
             assert!(tree.root.left.is_some());
             let left = tree.root.left.as_ref().unwrap();
@@ -457,12 +457,12 @@ mod tests {
             assert!(left.symbol.is_none());
             assert!(left.right.is_some());
             assert!(left.right.as_ref().unwrap().symbol.is_some());
-            assert_eq!(left.right.as_ref().unwrap().symbol.unwrap(), b'A');
+            assert_eq!(left.right.as_ref().unwrap().symbol.unwrap(), 'A');
         }
 
         {
-            tree.insert(0b000, 3, b'C');
-            tree.insert(0b001, 3, b'D');
+            tree.insert(0b000, 3, 'C');
+            tree.insert(0b001, 3, 'D');
 
             assert!(tree.root.left.is_some());
             let left = tree.root.left.as_ref().unwrap();
@@ -473,49 +473,37 @@ mod tests {
             // Check 'C'
             assert!(left.left.is_some());
             assert!(left.left.as_ref().unwrap().symbol.is_some());
-            assert_eq!(left.left.as_ref().unwrap().symbol.unwrap(), b'C');
+            assert_eq!(left.left.as_ref().unwrap().symbol.unwrap(), 'C');
 
             // Check 'D'
             assert!(left.right.is_some());
             assert!(left.right.as_ref().unwrap().symbol.is_some());
-            assert_eq!(left.right.as_ref().unwrap().symbol.unwrap(), b'D');
+            assert_eq!(left.right.as_ref().unwrap().symbol.unwrap(), 'D');
         }
     }
 
     #[test]
     fn test_huffman_tree_decode_good() {
         let mut tree = HuffmanTree::new();
-        tree.insert(0b1, 1, b'B');
-        tree.insert(0b01, 2, b'A');
-        tree.insert(0b000, 3, b'C');
-        tree.insert(0b001, 3, b'D');
+        tree.insert(0b1, 1, 'B');
+        tree.insert(0b01, 2, 'A');
+        tree.insert(0b000, 3, 'C');
+        tree.insert(0b001, 3, 'D');
 
-        struct TestData(usize, usize, &'static [u8]);
+        struct TestData(usize, usize, &'static [char]);
 
         // The underscored are placed to separate the bits as their
         // encoded characters
         let data = [
-            TestData(
-                0b1_1_1_01_000_001,
-                11,
-                &[b'B', b'B', b'B', b'A', b'C', b'D'],
-            ),
-            TestData(0b000_1_001_01, 9, &[b'C', b'B', b'D', b'A']),
-            TestData(
-                0b01_1_001_01_001_000,
-                14,
-                &[b'A', b'B', b'D', b'A', b'D', b'C'],
-            ),
+            TestData(0b1_1_1_01_000_001, 11, &['B', 'B', 'B', 'A', 'C', 'D']),
+            TestData(0b000_1_001_01, 9, &['C', 'B', 'D', 'A']),
+            TestData(0b01_1_001_01_001_000, 14, &['A', 'B', 'D', 'A', 'D', 'C']),
             TestData(
                 0b01_001_1_001_000_1_01_000,
                 18,
-                &[b'A', b'D', b'B', b'D', b'C', b'B', b'A', b'C'],
+                &['A', 'D', 'B', 'D', 'C', 'B', 'A', 'C'],
             ),
-            TestData(
-                0b000_001_01_1_001_01,
-                14,
-                &[b'C', b'D', b'A', b'B', b'D', b'A'],
-            ),
+            TestData(0b000_001_01_1_001_01, 14, &['C', 'D', 'A', 'B', 'D', 'A']),
         ];
 
         for TestData(code, length, expected_symbols) in data {
@@ -531,10 +519,10 @@ mod tests {
     #[test]
     fn test_huffman_tree_decode_bad() {
         let mut tree = HuffmanTree::new();
-        tree.insert(0b1, 1, b'B');
-        tree.insert(0b01, 2, b'A');
-        tree.insert(0b000, 3, b'C');
-        tree.insert(0b001, 3, b'D');
+        tree.insert(0b1, 1, 'B');
+        tree.insert(0b01, 2, 'A');
+        tree.insert(0b000, 3, 'C');
+        tree.insert(0b001, 3, 'D');
 
         struct TestData(usize, usize, usize);
 
