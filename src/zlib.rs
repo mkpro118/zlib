@@ -216,17 +216,11 @@ impl HuffmanTree {
         // Construct trees
         let lit_tree = Self::from_bitlen_list(
             &bitlen[..hlit],
-            &(0u32..286u32)
-                .map(|x| {
-                    char::from_u32(x).expect("Should be able to make a char")
-                })
-                .collect::<Vec<char>>(),
+            &literal_length_tree_alphabet(),
         );
 
-        let dist_tree = Self::from_bitlen_list(
-            &bitlen[hlit..],
-            &(0u8..30u8).map(|x| x as char).collect::<Vec<char>>(),
-        );
+        let dist_tree =
+            Self::from_bitlen_list(&bitlen[hlit..], &distance_tree_alphabet());
 
         (lit_tree, dist_tree)
     }
@@ -284,6 +278,16 @@ impl<'a> BitReader<'a> {
 
         out
     }
+}
+
+fn literal_length_tree_alphabet() -> Vec<char> {
+    (0u32..286u32)
+        .map(|x| char::from_u32(x).expect("Should be able to make a char"))
+        .collect::<Vec<char>>()
+}
+
+fn distance_tree_alphabet() -> Vec<char> {
+    (0u8..30u8).map(|x| x as char).collect::<Vec<char>>()
 }
 
 /// Encodes a code that is `length` bits long into bytes that is conformant
@@ -390,9 +394,20 @@ fn inflate_block_no_compression(reader: &mut BitReader, buffer: &mut Vec<u8>) {
     buffer.extend((0..len).map(|_| reader.read_byte()));
 }
 
-#[allow(clippy::ptr_arg)]
-#[allow(unused_variables)]
-fn inflate_block_fixed(reader: &mut BitReader, buffer: &mut Vec<u8>) {}
+fn inflate_block_fixed(reader: &mut BitReader, buffer: &mut Vec<u8>) {
+    let mut bitlen = vec![8; 144];
+    bitlen.extend_from_slice(&[9].repeat(256 - 144));
+    bitlen.extend_from_slice(&[7].repeat(280 - 256));
+    bitlen.extend_from_slice(&[8].repeat(288 - 280));
+    let literal_tree =
+        HuffmanTree::from_bitlen_list(&bitlen, &literal_length_tree_alphabet());
+
+    let bitlen = [5; 30];
+    let distance_tree =
+        HuffmanTree::from_bitlen_list(&bitlen, &distance_tree_alphabet());
+
+    inflate_block_data(reader, &literal_tree, &distance_tree, buffer);
+}
 
 /// Decompress block with dynamic huffman codes
 fn inflate_block_dynamic(reader: &mut BitReader, buffer: &mut Vec<u8>) {
