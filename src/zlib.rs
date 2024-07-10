@@ -325,4 +325,23 @@ mod tests {
             assert_eq!(decompressed, s);
         }
     }
+
+    #[test]
+    fn test_code_to_bytes() {
+        struct TestData(usize, usize, &'static [u8]);
+        let data = [
+            TestData(0b111_0100_0001, 11, &[1, 1, 1, 0, 1, 0, 0, 0, 0, 0, 1]),
+            TestData(0b1010_1010, 8, &[1, 0, 1, 0, 1, 0, 1, 0]),
+            TestData(0b11_0010, 6, &[1, 1, 0, 0, 1, 0]),
+        ];
+
+        for TestData(code, length, expected_bits) in data {
+            let bytes = code_to_bytes(code, length);
+            let mut reader = BitReader::new(&bytes);
+
+            for &bit in expected_bits {
+                assert_eq!(reader.read_bit(), bit);
+            }
+        }
+    }
 }
