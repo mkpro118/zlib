@@ -285,6 +285,46 @@ fn inflate_block_fixed(reader: &mut BitReader, buffer: &mut Vec<u8>) {}
 #[allow(unused_variables)]
 fn inflate_block_dynamic(reader: &mut BitReader, buffer: &mut Vec<u8>) {}
 
+fn inflate_block_data(
+    reader: &mut BitReader,
+    literal_tree: &HuffmanTree,
+    distance_tree: &HuffmanTree,
+    buffer: &mut Vec<u8>,
+) {
+    loop {
+        let Some(sym) = literal_tree.decode(reader) else {
+            return;
+        };
+
+        let sym_as_int = sym as usize;
+
+        match sym_as_int {
+            0..=255 => buffer.push(sym as u8),
+            256 => return,
+            257..=285 => {
+                let idx = sym_as_int - 257;
+
+                let length =
+                    reader.read_bits(LENGTH_EXTRA_BITS[idx]) + LENGTH_BASE[idx];
+
+                let Some(distance) = distance_tree.decode(reader) else {
+                    panic!("Failed to read backwards distance!");
+                };
+
+                let idx = distance as usize;
+
+                let dist = reader.read_bits(DISTANCE_EXTRA_BITS[idx])
+                    + DISTANCE_BASE[idx];
+
+                for _ in 0..length {
+                    buffer.push(buffer[buffer.len() - dist]);
+                }
+            }
+            _ => panic!("Invalid decoded value"),
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
