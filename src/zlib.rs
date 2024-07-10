@@ -394,6 +394,7 @@ fn inflate_block_no_compression(reader: &mut BitReader, buffer: &mut Vec<u8>) {
     buffer.extend((0..len).map(|_| reader.read_byte()));
 }
 
+/// Decompress block with fixed huffman codes
 fn inflate_block_fixed(reader: &mut BitReader, buffer: &mut Vec<u8>) {
     let mut bitlen = vec![8; 144];
     bitlen.extend_from_slice(&[9].repeat(256 - 144));
