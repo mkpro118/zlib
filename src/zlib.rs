@@ -41,6 +41,30 @@ impl HuffmanTree {
             root: HuffmanTreeNode::new(),
         }
     }
+
+    fn insert(&mut self, code: usize, length: usize, symbol: u8) {
+        let mut node = &mut self.root;
+
+        for i in (0..length).rev() {
+            node = if code & (1 << i) == 0 {
+                if let Some(ref mut next_node) = node.left {
+                    next_node
+                } else {
+                    node.left = Some(Box::new(HuffmanTreeNode::new()));
+                    node.left.as_mut().expect("Should exist as we just made it")
+                }
+            } else if let Some(ref mut next_node) = node.right {
+                next_node
+            } else {
+                node.right = Some(Box::new(HuffmanTreeNode::new()));
+                node.right
+                    .as_mut()
+                    .expect("Should exist as we just made it")
+            }
+        }
+
+        node.symbol = Some(symbol);
+    }
 }
 
 impl<'a> BitReader<'a> {
