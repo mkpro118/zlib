@@ -150,6 +150,86 @@ impl HuffmanTree {
                 tree
             })
     }
+
+    fn decode_trees(reader: &mut BitReader) -> (Self, Self) {
+        // The number of Huffman LITeral/length codes
+        let hlit = reader.read_bits(5) + 257;
+
+        // The number of Huffman Distance codes
+        let hdist = reader.read_bits(5) + 1;
+
+        // The number of Huffman Code LENgth codes
+        let hclen = reader.read_bits(4) + 4;
+
+        // Read code lengths for the code length alphabet
+        let code_length_tree_bl = (0..hclen).fold([0; 19], |mut acc, i| {
+            acc[i] = reader.read_bits(3);
+            acc
+        });
+
+        // Construct code length tree
+        let code_length_tree_alphabet: Vec<char> =
+            (0u8..19u8).map(|x| x as char).collect();
+        let code_length_tree = Self::from_bitlen_list(
+            &code_length_tree_bl,
+            &code_length_tree_alphabet,
+        );
+
+        let mut bitlen: Vec<usize> = vec![];
+        let maxlen = hlit + hdist;
+
+        while bitlen.len() < maxlen {
+            let Some(sym) = code_length_tree.decode(reader) else {
+                panic!("Expected sym, found nothing!");
+            };
+
+            let sym = sym as usize;
+
+            match sym {
+                0..=15 => bitlen.push(sym),
+                16 => {
+                    // Copy the previous code length 3-6 times.
+                    // The next 2 bits indicate repeat length
+                    // ( 0 -> 3, ..., 3 -> 6 )
+                    let prev_code_length = *bitlen
+                        .last()
+                        .expect("Should have at least one element to repeat");
+                    let repeat_length = reader.read_bits(2) + 3;
+                    bitlen.extend_from_slice(
+                        &[prev_code_length].repeat(repeat_length),
+                    );
+                }
+                17 => {
+                    // Repeat code length 0 for 3-10 times. (3 bits of length)
+                    let repeat_length = reader.read_bits(3) + 3;
+                    bitlen.extend_from_slice(&[0].repeat(repeat_length));
+                }
+                18 => {
+                    // Repeat code length 0 for 11-138 times. (7 bits of length)
+                    let repeat_length = reader.read_bits(7) + 11;
+                    bitlen.extend_from_slice(&[0].repeat(repeat_length));
+                }
+                _ => panic!("Invalid Symbol!"),
+            }
+        }
+
+        // Construct trees
+        let lit_tree = Self::from_bitlen_list(
+            &bitlen[..hlit],
+            &(0u32..286u32)
+                .map(|x| {
+                    char::from_u32(x).expect("Should be able to make a char")
+                })
+                .collect::<Vec<char>>(),
+        );
+
+        let dist_tree = Self::from_bitlen_list(
+            &bitlen[hlit..],
+            &(0u8..30u8).map(|x| x as char).collect::<Vec<char>>(),
+        );
+
+        (lit_tree, dist_tree)
+    }
 }
 
 impl<'a> BitReader<'a> {
