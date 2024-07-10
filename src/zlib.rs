@@ -76,6 +76,32 @@ impl HuffmanTree {
 
         node.symbol = Some(symbol);
     }
+
+    fn decode(&self, reader: &mut BitReader) -> Option<u8> {
+        let mut node = &self.root;
+
+        while node.left.is_some() || node.right.is_some() {
+            node = match reader.read_bit() {
+                0 => {
+                    if let Some(next) = &node.left {
+                        &next
+                    } else {
+                        return None;
+                    }
+                }
+                1 => {
+                    if let Some(next) = &node.right {
+                        &next
+                    } else {
+                        return None;
+                    }
+                }
+                _ => unreachable!(),
+            }
+        }
+
+        node.symbol
+    }
 }
 
 impl<'a> BitReader<'a> {
