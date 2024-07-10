@@ -72,6 +72,73 @@ impl LZ77 {
         self.lookahead_buffer_size = self.window_size - newsize;
         self
     }
+
+    pub fn compress(&self, data: &[u8]) -> Vec<u8> {
+        let mut writer = BitWriter::new();
+
+        let mut idx = 0;
+        while idx < data.len() {
+            idx += match self.find_longest_match(data, idx) {
+                Some((distance, length)) => {
+                    writer.write_bit(1);
+                    writer.write_bits(distance >> 4, 8);
+                    writer.write_bits(((distance & 0xf) << 4) | length, 8);
+                    length
+                }
+                None => {
+                    writer.write_bit(0);
+                    writer.write_bits(data[idx] as usize, 8);
+                    1
+                }
+            }
+        }
+
+        writer.finish()
+    }
+
+    fn find_longest_match(
+        &self,
+        data: &[u8],
+        idx: usize,
+    ) -> Option<(usize, usize)> {
+        let end_of_buffer =
+            (idx + self.lookahead_buffer_size).min(data.len() + 1);
+
+        let mut best_match_distance: isize = -1;
+        let mut best_match_length: isize = -1;
+
+        for j in (idx + 2)..end_of_buffer {
+            let start_idx = if self.window_size > idx {
+                0
+            } else {
+                idx - self.window_size
+            };
+
+            let substr = &data[start_idx..j];
+
+            for i in start_idx..idx {
+                let repetitions = substr.len() / (idx - i);
+                let last = substr.len() % (idx - i);
+
+                let mut matched_str = data[i..idx].repeat(repetitions);
+                matched_str.extend_from_slice(&data[i..(i + last)]);
+
+                let substr_len = substr.len() as isize;
+                if matched_str == substr && substr_len > best_match_length {
+                    best_match_distance = (idx - i) as isize;
+                    best_match_length = substr_len;
+                }
+            }
+        }
+
+        if best_match_length > 0 {
+            let distance = best_match_distance as usize;
+            let length = best_match_length as usize;
+            Some((distance, length))
+        } else {
+            None
+        }
+    }
 }
 
 #[cfg(test)]
