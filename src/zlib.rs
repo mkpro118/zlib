@@ -394,9 +394,12 @@ fn inflate_block_no_compression(reader: &mut BitReader, buffer: &mut Vec<u8>) {
 #[allow(unused_variables)]
 fn inflate_block_fixed(reader: &mut BitReader, buffer: &mut Vec<u8>) {}
 
-#[allow(clippy::ptr_arg)]
-#[allow(unused_variables)]
-fn inflate_block_dynamic(reader: &mut BitReader, buffer: &mut Vec<u8>) {}
+/// Decompress block with dynamic huffman codes
+fn inflate_block_dynamic(reader: &mut BitReader, buffer: &mut Vec<u8>) {
+    let (literal_length_tree, distance_tree) =
+        HuffmanTree::decode_trees(reader);
+    inflate_block_data(reader, &literal_length_tree, &distance_tree, buffer);
+}
 
 fn inflate_block_data(
     reader: &mut BitReader,
