@@ -1,6 +1,5 @@
 // Inspired from: https://pyokagan.name/blog/2019-10-18-zlibinflate/
 
-#![allow(dead_code)]
 #![allow(clippy::missing_errors_doc)]
 #![allow(clippy::missing_panics_doc)]
 #![allow(missing_docs)]
@@ -163,7 +162,7 @@ impl HuffmanTree {
 
         // Read code lengths for the code length alphabet
         let code_length_tree_bl = (0..hclen).fold([0; 19], |mut acc, i| {
-            acc[i] = reader.read_bits(3);
+            acc[CODE_LENGTH_CODES_ORDER[i]] = reader.read_bits(3);
             acc
         });
 
