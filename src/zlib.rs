@@ -46,16 +46,27 @@ impl HuffmanTree {
         let mut node = &mut self.root;
 
         for i in (0..length).rev() {
+            // This complicated expression essentially finds the next node
+            // in the huffman tree, given a particular bit
             node = if code & (1 << i) == 0 {
+                // Bit is zero, left exists
                 if let Some(ref mut next_node) = node.left {
                     next_node
-                } else {
+                }
+                // Bit is zero, left does not exist
+                else {
+                    // So create it
                     node.left = Some(Box::new(HuffmanTreeNode::new()));
                     node.left.as_mut().expect("Should exist as we just made it")
                 }
-            } else if let Some(ref mut next_node) = node.right {
+            }
+            // Bit is one, right exists
+            else if let Some(ref mut next_node) = node.right {
                 next_node
-            } else {
+            }
+            // Bit is one, right does not exist
+            else {
+                // So create it
                 node.right = Some(Box::new(HuffmanTreeNode::new()));
                 node.right
                     .as_mut()
