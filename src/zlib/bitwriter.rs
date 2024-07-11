@@ -27,7 +27,9 @@ impl BitWriter {
 
     pub fn write_bits(&mut self, mut value: usize, mut num_bits: usize) {
         while num_bits > 0 {
-            self.write_bit((value & 1) as u8);
+            self.write_bit(
+                u8::try_from(value & 1).expect("should be able to write 1 bit"),
+            );
             value >>= 1;
             num_bits -= 1;
         }
