@@ -129,8 +129,9 @@ impl HuffmanTree {
         }
     }
 
+    #[must_use]
     pub fn from_data(data: &[u8]) -> Self {
-        let map = data.into_iter().fold(HashMap::new(), |mut map, &sym| {
+        let map = data.iter().fold(HashMap::new(), |mut map, &sym| {
             let sym = sym as char;
             *map.entry(sym).or_insert(0) += 1;
             map
@@ -139,6 +140,8 @@ impl HuffmanTree {
         Self::from_freq(map)
     }
 
+    #[must_use]
+    #[allow(clippy::missing_panics_doc)]
     pub fn from_freq(frequencies: HashMap<char, usize>) -> Self {
         // Convert hashmap to binary heap friendly data structure
         let mut heap = frequencies
@@ -164,6 +167,8 @@ impl HuffmanTree {
         }
     }
 
+    #[must_use]
+    #[allow(clippy::missing_panics_doc, clippy::cast_possible_truncation)]
     pub fn from_lz77(data: &[u8], lz77: &LZ77Compressor) -> (Self, Self) {
         check_lz77(lz77);
 
@@ -171,7 +176,7 @@ impl HuffmanTree {
         let mut dist_freq = [0usize; 30];
 
         let mut count_sym = |byte: usize| sym_freq[byte] += 1;
-        let mut count_dist = |byte| dist_freq[byte as usize] += 1;
+        let mut count_dist = |byte| dist_freq[byte] += 1;
 
         let mut idx = 0;
 
@@ -563,6 +568,7 @@ fn check_lz77(lz77: &LZ77Compressor) {
     );
 }
 
+#[must_use]
 pub fn get_length_code(length: usize) -> usize {
     match LENGTH_BASE.binary_search(&length) {
         Ok(index) => index + 257,
@@ -570,6 +576,7 @@ pub fn get_length_code(length: usize) -> usize {
     }
 }
 
+#[must_use]
 pub fn get_distance_code(distance: usize) -> usize {
     match DISTANCE_BASE.binary_search(&distance) {
         Ok(index) => index,

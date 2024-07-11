@@ -7,8 +7,9 @@ pub enum Strategy {
     Raw,
 }
 
-pub fn compress(data: &[u8], strategy: Strategy) -> Vec<u8> {
-    use Strategy::*;
+#[must_use]
+pub fn compress(data: &[u8], strategy: &Strategy) -> Vec<u8> {
+    use Strategy::{Auto, Dynamic, Fixed, Raw};
 
     let mut bitwriter = BitWriter::new();
     match strategy {
@@ -21,6 +22,7 @@ pub fn compress(data: &[u8], strategy: Strategy) -> Vec<u8> {
     bitwriter.finish()
 }
 
+#[allow(clippy::cast_possible_truncation)]
 fn compress_raw(writer: &mut BitWriter, data: &[u8]) {
     // Write length of block
     let len = data.len() as u16;

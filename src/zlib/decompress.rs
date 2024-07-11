@@ -2,7 +2,10 @@
 //! Inspired from: [this article](https://pyokagan.name/blog/2019-10-18-zlibinflate/)
 
 use crate::zlib::bitreader::BitReader;
-use crate::zlib::huffman::*;
+use crate::zlib::huffman::{
+    distance_tree_alphabet, literal_length_tree_alphabet, HuffmanTree,
+    DISTANCE_BASE, DISTANCE_EXTRA_BITS, LENGTH_BASE, LENGTH_EXTRA_BITS,
+};
 
 /// Decompresses DEFLATE-compressed data.
 ///

@@ -266,6 +266,7 @@ impl LZ77Compressor {
     ///
     /// Panics if the value is out of range for the given width.
     #[allow(clippy::cast_possible_truncation)]
+    #[must_use]
     pub fn encode_reference_int(
         &self,
         mut value: usize,
@@ -304,27 +305,23 @@ impl LZ77Compressor {
     }
 
     /// Shortcut function for encoding reference lengths
+    #[must_use]
     pub fn encode_reference_length(&self, length: usize) -> Vec<u8> {
         self.encode_reference_int(length - self.min_string_length, 1)
     }
 
-    #[allow(clippy::cast_possible_truncation)]
+    #[allow(clippy::cast_possible_truncation, clippy::missing_panics_doc)]
+    #[must_use]
     pub fn decode_reference_int(&self, data: &[u8], width: usize) -> usize {
-        assert!(
-            data.len() >= width,
-            "Not enough data to read {} bits",
-            width
-        );
+        assert!(data.len() >= width, "Not enough data to read {width} bits");
         let mut value = 0usize;
 
-        for i in 0..width {
+        for &code in data.iter().take(width) {
             value *= self.reference_int_base as usize;
-            let code = data[i];
             assert!(
                 code >= self.reference_int_floor_code
                     && code <= self.reference_int_ceil_code,
-                "Invalid char code: {}",
-                code
+                "Invalid char code: {code}"
             );
             value += (code - self.reference_int_floor_code) as usize;
         }
@@ -332,6 +329,7 @@ impl LZ77Compressor {
         value
     }
 
+    #[must_use]
     pub fn decode_reference_length(&self, data: &[u8]) -> usize {
         self.decode_reference_int(data, 1) + self.min_string_length
     }
