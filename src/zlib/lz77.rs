@@ -1,3 +1,20 @@
+//! This module implements the LZ77 compression algorithm.
+//!
+//! LZ77 is a lossless data compression algorithm that replaces repeated
+//! occurrences of data with references to a single copy of that data existing
+//! earlier in the input stream.
+//!
+//! # Examples
+//!
+//! ```
+//! use mini_git::zlib::lz77::LZ77Compressor;
+//!
+//! let mut compressor = LZ77Compressor::new();
+//! let data = b"ABC BC BC BC BC CD";
+//! let compressed = compressor.compress(data);
+//! assert!(compressed.len() < data.len());
+//! ```
+
 #![allow(dead_code)]
 
 use std::collections::VecDeque;
@@ -13,20 +30,40 @@ const DEFAULT_MAX_STRING_LENGTH: usize = 100;
 const MAX_WINDOW_SIZE: usize = 1 << 15; // 32KB
 const DEFAULT_WINDOW_SIZE: usize = 144;
 
+/// Represents an LZ77 compressor with configurable parameters.
 #[derive(Debug)]
 pub struct LZ77Compressor {
-    window_size: usize,
+    /// The size of the sliding window used for finding matches.
+    pub window_size: usize,
+    /// The character used to indicate a reference in the compressed output.
     pub reference_prefix: char,
+    /// The byte code for the reference prefix.
     pub reference_prefix_code: u8,
+    /// The base used for encoding reference integers.
     pub reference_int_base: u8,
+    /// The floor code for reference integers.
     pub reference_int_floor_code: u8,
+    /// The ceiling code for reference integers.
     pub reference_int_ceil_code: u8,
+    /// The maximum distance allowed for string references.
     pub max_string_distance: usize,
+    /// The minimum length required for string references.
     pub min_string_length: usize,
+    /// The maximum length allowed for string references.
     pub max_string_length: usize,
 }
 
 impl Default for LZ77Compressor {
+    /// Creates a new `LZ77Compressor` with default settings.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use mini_git::zlib::lz77::LZ77Compressor;
+    ///
+    /// let compressor = LZ77Compressor::default();
+    /// dbg!(&compressor);
+    /// ```
     fn default() -> Self {
         Self {
             window_size: DEFAULT_WINDOW_SIZE,
@@ -43,10 +80,33 @@ impl Default for LZ77Compressor {
 }
 
 impl LZ77Compressor {
+    /// Creates a new `LZ77Compressor` with default settings.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use mini_git::zlib::lz77::LZ77Compressor;
+    ///
+    /// let compressor = LZ77Compressor::new();
+    /// ```
     pub fn new() -> Self {
         Self::default()
     }
 
+    /// Creates a new `LZ77Compressor` with a custom window size.
+    ///
+    /// # Arguments
+    ///
+    /// * `window_size` - The size of the sliding window to use.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use mini_git::zlib::lz77::LZ77Compressor;
+    ///
+    /// let compressor = LZ77Compressor::with_window_size(1024);
+    /// assert_eq!(compressor.window_size, 1024);
+    /// ```
     pub fn with_window_size(window_size: usize) -> Self {
         let window_size = window_size.min(MAX_WINDOW_SIZE);
         Self {
@@ -55,11 +115,50 @@ impl LZ77Compressor {
         }
     }
 
+    /// Sets the window size for the compressor.
+    ///
+    /// # Arguments
+    ///
+    /// * `newsize` - The new window size to set.
+    ///
+    /// # Returns
+    ///
+    /// Returns a mutable reference to the compressor for method chaining.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use mini_git::zlib::lz77::LZ77Compressor;
+    ///
+    /// let mut compressor = LZ77Compressor::new();
+    /// compressor.set_window_size(2048);
+    /// assert_eq!(compressor.window_size, 2048);
+    /// ```
     pub fn set_window_size(&mut self, newsize: usize) -> &mut Self {
         self.window_size = newsize.min(MAX_WINDOW_SIZE);
         self
     }
 
+    /// Compresses the input data using the LZ77 algorithm.
+    ///
+    /// # Arguments
+    ///
+    /// * `data` - The input data to compress.
+    ///
+    /// # Returns
+    ///
+    /// Returns a `Vec<u8>` containing the compressed data.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use mini_git::zlib::lz77::LZ77Compressor;
+    ///
+    /// let compressor = LZ77Compressor::new();
+    /// let data = b"ABCBDBDBDBDBDBDBCBADBSB";
+    /// let compressed = compressor.compress(data);
+    /// assert!(compressed.len() < data.len());
+    /// ```
     pub fn compress(&self, data: &[u8]) -> Vec<u8> {
         let mut compressed: Vec<u8> = vec![];
         let window_size = self.window_size;
@@ -149,6 +248,20 @@ impl LZ77Compressor {
         compressed
     }
 
+    /// Encodes a reference integer used in LZ77 compression.
+    ///
+    /// # Arguments
+    ///
+    /// * `value` - The integer value to encode.
+    /// * `width` - The number of bytes to use for encoding.
+    ///
+    /// # Returns
+    ///
+    /// Returns a `Vec<u8>` containing the encoded integer.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the value is out of range for the given width.
     #[allow(clippy::cast_possible_truncation)]
     fn encode_reference_int(&self, mut value: usize, width: usize) -> Vec<u8> {
         let ref_int_base = self.reference_int_base as usize;
@@ -183,6 +296,7 @@ impl LZ77Compressor {
         Vec::from(encoded)
     }
 
+    /// Shortcut function for encoding reference lengths
     fn encode_reference_length(&self, length: usize) -> Vec<u8> {
         self.encode_reference_int(length - self.min_string_length, 1)
     }
