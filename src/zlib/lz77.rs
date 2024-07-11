@@ -1,143 +1,187 @@
-#![allow(unused_mut)]
-#![allow(unused_variables)]
-#![allow(unused_imports)]
 #![allow(dead_code)]
 
-use std::{ops::Sub, os::windows};
+use std::{cmp::Ordering, collections::VecDeque, ops::Sub, os::windows};
 
 use crate::zlib::bitwriter::BitWriter;
 
-const MAX_WINDOW_SIZE: usize = 1 << 15; // 32 KB
+const REFERENCE_PREFIX: char = '`';
+const REFERENCE_PREFIX_CODE: u8 = REFERENCE_PREFIX as u8;
+const REFERENCE_INT_BASE: u8 = 96;
+const REFERENCE_INT_FLOOR_CODE: u8 = b' ';
+const REFERENCE_INT_CEIL_CODE: u8 = 127;
+const DEFAULT_MAX_STRING_DISTANCE: usize = 9215; // 32KB
+const DEFAULT_MIN_STRING_LENGTH: usize = 5;
+const DEFAULT_MAX_STRING_LENGTH: usize = 100;
+const MAX_WINDOW_SIZE: usize = 1 << 15; // 32KB
+const DEFAULT_WINDOW_SIZE: usize = 144;
 
 #[derive(Debug)]
 pub struct LZ77Compressor {
-    window_size: usize,
-    lookahead_buffer_size: usize,
+    pub window_size: usize,
+    pub reference_prefix: char,
+    pub reference_prefix_code: u8,
+    pub reference_int_base: u8,
+    pub reference_int_floor_code: u8,
+    pub reference_int_ceil_code: u8,
+    pub max_string_distance: usize,
+    pub min_string_length: usize,
+    pub max_string_length: usize,
+}
+
+impl Default for LZ77Compressor {
+    fn default() -> Self {
+        Self {
+            window_size: DEFAULT_WINDOW_SIZE,
+            reference_prefix: REFERENCE_PREFIX,
+            reference_prefix_code: REFERENCE_PREFIX_CODE,
+            reference_int_base: REFERENCE_INT_BASE,
+            reference_int_floor_code: REFERENCE_INT_FLOOR_CODE,
+            reference_int_ceil_code: REFERENCE_INT_CEIL_CODE,
+            max_string_distance: DEFAULT_MAX_STRING_DISTANCE,
+            min_string_length: DEFAULT_MIN_STRING_LENGTH,
+            max_string_length: DEFAULT_MAX_STRING_LENGTH,
+        }
+    }
 }
 
 impl LZ77Compressor {
     pub fn new() -> Self {
-        Self {
-            window_size: MAX_WINDOW_SIZE,
-            lookahead_buffer_size: MAX_WINDOW_SIZE / 2,
-        }
+        Self::default()
     }
 
     pub fn with_window_size(window_size: usize) -> Self {
         let window_size = window_size.min(MAX_WINDOW_SIZE);
-        let lookahead_buffer_size = window_size / 2;
         Self {
             window_size,
-            lookahead_buffer_size,
+            ..Self::default()
         }
     }
 
     pub fn set_window_size(&mut self, newsize: usize) -> &mut Self {
         self.window_size = newsize;
-        self.lookahead_buffer_size = newsize / 2;
-        self
-    }
-
-    pub fn set_lookahead_buffer_size(&mut self, newsize: usize) -> &mut Self {
-        if newsize == self.window_size {
-            panic!(
-                "Requested lookahead buffer size is invalid as it \
-                would leave no room for the search buffer"
-            );
-        } else if newsize > self.window_size {
-            panic!(
-                "Requested lookahead buffer size is invalid as it \
-                overflows the window size.\n\
-                Help: First increase the window size using set_window_size(usize)"
-            );
-        }
-        self.lookahead_buffer_size = newsize;
-        self
-    }
-
-    pub fn set_search_buffer_size(&mut self, newsize: usize) -> &mut Self {
-        if newsize == self.window_size {
-            panic!(
-                "Requested search buffer size is invalid as it \
-                would leave no room for the lookahead buffer.\n\
-                Help: First increase the window size using set_window_size(usize)"
-            );
-        } else if newsize > self.window_size {
-            panic!(
-                "Requested search buffer size is invalid as it \
-                overflows the window size.\n\
-                Help: First increase the window size using set_window_size(usize)"
-            );
-        }
-        self.lookahead_buffer_size = self.window_size - newsize;
         self
     }
 
     pub fn compress(&self, data: &[u8]) -> Vec<u8> {
-        let mut writer = BitWriter::new();
+        let mut compressed: Vec<u8> = vec![];
+        let window_size = self.window_size;
 
-        let mut idx = 0;
-        while idx < data.len() {
-            idx += match self.find_longest_match(data, idx) {
-                Some((distance, length)) => {
-                    writer.write_bit(1);
-                    writer.write_bits(distance >> 4, 8);
-                    writer.write_bits(((distance & 0xf) << 4) | length, 8);
-                    length
-                }
-                None => {
-                    writer.write_bit(0);
-                    writer.write_bits(data[idx] as usize, 8);
-                    1
-                }
-            }
-        }
+        let mut pos = 0;
+        let last_pos = data.len() - self.min_string_length;
 
-        writer.finish()
-    }
-
-    fn find_longest_match(
-        &self,
-        data: &[u8],
-        idx: usize,
-    ) -> Option<(usize, usize)> {
-        let end_of_buffer =
-            (idx + self.lookahead_buffer_size).min(data.len() + 1);
-
-        let mut best_match_distance: isize = -1;
-        let mut best_match_length: isize = -1;
-
-        for j in (idx + 2)..end_of_buffer {
-            let start_idx = if self.window_size > idx {
-                0
+        while pos < last_pos {
+            let mut search_start = if pos > window_size {
+                pos - window_size
             } else {
-                idx - self.window_size
+                0
             };
 
-            let substr = &data[start_idx..j];
+            let mut match_length = self.min_string_length;
 
-            for i in start_idx..idx {
-                let repetitions = substr.len() / (idx - i);
-                let last = substr.len() % (idx - i);
+            let mut found_match = false;
+            let mut best_match_distance = self.max_string_distance;
+            let mut best_match_length = 0;
+            let new_compressed: Option<Vec<u8>>;
 
-                let mut matched_str = data[i..idx].repeat(repetitions);
-                matched_str.extend_from_slice(&data[i..(i + last)]);
+            while search_start + match_length < pos {
+                let end = data.len().min(search_start + match_length);
+                let m1 = &data[search_start..end];
+                let end = data.len().min(pos + match_length);
+                let m2 = &data[pos..end];
 
-                let substr_len = substr.len() as isize;
-                if matched_str == substr && substr_len > best_match_length {
-                    best_match_distance = (idx - i) as isize;
-                    best_match_length = substr_len;
+                if m1 == m2 && match_length < self.max_string_length {
+                    match_length += 1;
+                    found_match = true;
+                } else {
+                    let true_match_length = match_length - 1;
+
+                    if found_match && true_match_length > best_match_length {
+                        best_match_distance =
+                            pos - search_start - true_match_length;
+                        best_match_length = true_match_length;
+                    }
+
+                    match_length = self.min_string_length;
+                    search_start += 1;
+                    found_match = false;
                 }
+            }
+
+            pos += if best_match_length > 0 {
+                let mut new_data = vec![self.reference_prefix_code];
+                new_data.extend_from_slice(
+                    &self.encode_reference_int(best_match_distance, 2),
+                );
+                new_data.extend_from_slice(
+                    &self.encode_reference_length(best_match_length),
+                );
+
+                new_compressed = Some(new_data);
+                best_match_length
+            } else {
+                let new_data = if data[pos] == self.reference_prefix_code {
+                    vec![self.reference_prefix_code, self.reference_prefix_code]
+                } else {
+                    vec![data[pos]]
+                };
+
+                new_compressed = Some(new_data);
+
+                1
+            };
+
+            if let Some(chunk) = new_compressed {
+                compressed.extend_from_slice(&chunk);
             }
         }
 
-        if best_match_length > 0 {
-            let distance = best_match_distance as usize;
-            let length = best_match_length as usize;
-            Some((distance, length))
-        } else {
-            None
+        compressed.extend(data[pos..].iter().fold(vec![], |mut acc, &x| {
+            if x == self.reference_prefix_code {
+                acc.push(x);
+            }
+            acc.push(x);
+            acc
+        }));
+
+        compressed
+    }
+
+    #[allow(clippy::cast_possible_truncation)]
+    fn encode_reference_int(&self, mut value: usize, width: usize) -> Vec<u8> {
+        let ref_int_base = self.reference_int_base as usize;
+
+        assert!(
+            value < ref_int_base.pow(width as u32) - 1,
+            "{}",
+            format!("Reference value out of range: {value} (width = {width})")
+        );
+
+        let mut encoded: VecDeque<u8> = VecDeque::new();
+
+        while value > 0 {
+            let byte = (value % ref_int_base) as u8;
+            let byte = byte + self.reference_int_floor_code;
+            encoded.push_front(byte);
+
+            value /= ref_int_base;
         }
+
+        let missing_len = if width > encoded.len() {
+            width - encoded.len()
+        } else {
+            0
+        };
+
+        let encoded = (0..missing_len).fold(encoded, |mut acc, _| {
+            acc.push_front(self.reference_int_floor_code);
+            acc
+        });
+
+        Vec::from(encoded)
+    }
+
+    fn encode_reference_length(&self, length: usize) -> Vec<u8> {
+        self.encode_reference_int(length - self.min_string_length, 1)
     }
 }
 
@@ -146,71 +190,44 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_new() {
-        let lz77 = LZ77Compressor::new();
+    fn test_compress_should_reduce_size() {
+        let data = [
+            (
+                "ABCBDBDBDBDBDBDBCBADBSB".as_bytes(),
+                "ABCBDBDBDBD` # CBADBSB".as_bytes(),
+            ),
+            (
+                "hi hi hello hi hi wow hello hi".as_bytes(),
+                "hi hi hello` $ i wow` '$".as_bytes(),
+            ),
+            (
+                "abcdefabcdefabcdef".as_bytes(),
+                "abcdefabcdef` &!".as_bytes(),
+            ),
+        ];
 
-        assert_eq!(lz77.window_size, MAX_WINDOW_SIZE);
-        assert_eq!(lz77.lookahead_buffer_size, MAX_WINDOW_SIZE / 2);
-    }
-
-    #[test]
-    fn test_with_window_size() {
-        for size in 32..64 {
-            let lz77 = LZ77Compressor::with_window_size(size);
-
-            assert_eq!(lz77.window_size, size);
-            assert_eq!(lz77.lookahead_buffer_size, size / 2);
+        let compressor = LZ77Compressor::default();
+        for (raw_data, known_compressed) in data {
+            let compressed = compressor.compress(&raw_data);
+            assert!(raw_data.len() > compressed.len());
+            assert_eq!(known_compressed.len(), compressed.len());
+            assert_eq!(known_compressed, compressed);
         }
     }
 
     #[test]
-    fn test_set_window_size() {
-        let mut lz77 = LZ77Compressor::new();
+    fn test_compress_should_not_reduce_size() {
+        let data = [
+            "ABCDEFGHIJKLMNOPQRSTUVWXYZ".as_bytes(),
+            "LZ77 compression in Rust!".as_bytes(),
+            "only repeat twice 2233445566".as_bytes(),
+        ];
 
-        for size in 32..64 {
-            lz77.set_window_size(size);
-            assert_eq!(lz77.window_size, size);
-            assert_eq!(lz77.lookahead_buffer_size, size / 2);
+        let compressor = LZ77Compressor::new();
+        for raw_data in data {
+            let compressed = compressor.compress(&raw_data);
+            assert_eq!(raw_data.len(), compressed.len());
+            assert_eq!(raw_data, compressed);
         }
-    }
-
-    #[test]
-    fn test_set_lookahead_buffer_size() {
-        let mut lz77 = LZ77Compressor::new();
-
-        for size in 32..64 {
-            lz77.set_lookahead_buffer_size(size);
-            assert_eq!(lz77.window_size, MAX_WINDOW_SIZE);
-            assert_eq!(lz77.lookahead_buffer_size, size);
-        }
-    }
-
-    #[test]
-    #[should_panic]
-    fn test_set_lookahead_buffer_size_bad_input1() {
-        let size = 64;
-        LZ77Compressor::with_window_size(size).set_lookahead_buffer_size(size);
-    }
-
-    #[test]
-    #[should_panic]
-    fn test_set_lookahead_buffer_size_bad_input2() {
-        let size = 64;
-        LZ77Compressor::with_window_size(size)
-            .set_lookahead_buffer_size(size + 1);
-    }
-
-    #[test]
-    #[should_panic]
-    fn test_set_search_buffer_size_bad_input1() {
-        let size = 64;
-        LZ77Compressor::with_window_size(size).set_search_buffer_size(size);
-    }
-
-    #[test]
-    #[should_panic]
-    fn test_set_search_buffer_size_bad_input2() {
-        let size = 64;
-        LZ77Compressor::with_window_size(size).set_search_buffer_size(size + 1);
     }
 }
