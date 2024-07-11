@@ -99,9 +99,14 @@ impl HuffmanTree {
         }
     }
 
-    pub fn from_data(_data: &[u8]) -> Self {
-        let tree = Self::new();
-        tree
+    pub fn from_data(data: &[u8]) -> Self {
+        let map = data.into_iter().fold(HashMap::new(), |mut map, &sym| {
+            let sym = sym as char;
+            *map.entry(sym).or_insert(0) += 1;
+            map
+        });
+
+        Self::from_freq(map)
     }
 
     pub fn from_freq(_frequencies: HashMap<char, usize>) -> Self {
