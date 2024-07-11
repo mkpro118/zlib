@@ -1,23 +1,48 @@
+//! This module implements Huffman coding for data compression.
+//!
+//! Huffman coding is a widely used method for lossless data compression. It assigns variable-length codes
+//! to characters based on their frequency of occurrence, with more frequent characters getting shorter codes.
+//!
+//! # Examples
+//!
+//! ```
+//! use mini_git::zlib::huffman::{HuffmanTree, literal_length_tree_alphabet};
+//!
+//! let bitlen = vec![2, 1, 3, 3];
+//! let alphabet = vec!['A', 'B', 'C', 'D'];
+//! let tree = HuffmanTree::from_bitlen_list(&bitlen, &alphabet);
+//!
+//! // You can now use this tree for encoding or decoding
+//! ```
+
 use crate::zlib::bitreader::BitReader;
 
+/// The order of code length codes used in Huffman tree construction.
 static CODE_LENGTH_CODES_ORDER: [usize; 19] = [
     16, 17, 18, 0, 8, 7, 9, 6, 10, 5, 11, 4, 12, 3, 13, 2, 14, 1, 15,
 ];
 
+/// Represents a node in the Huffman tree.
 #[derive(Debug)]
 struct HuffmanTreeNode {
+    /// The symbol stored in this node, if it's a leaf node.
     symbol: Option<char>,
+    /// The left child of this node.
     left: Option<Box<HuffmanTreeNode>>,
+    /// The right child of this node.
     right: Option<Box<HuffmanTreeNode>>,
 }
 
+/// Represents a Huffman tree used for encoding and decoding.
 #[derive(Debug)]
 #[allow(clippy::module_name_repetitions)]
 pub struct HuffmanTree {
+    /// The root node of the Huffman tree.
     root: HuffmanTreeNode,
 }
 
 impl HuffmanTreeNode {
+    /// Creates a new `HuffmanTreeNode`.
     pub fn new() -> Self {
         Self {
             symbol: None,
@@ -28,12 +53,38 @@ impl HuffmanTreeNode {
 }
 
 impl HuffmanTree {
+    /// Creates a new `HuffmanTree`.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use mini_git::zlib::huffman::HuffmanTree;
+    ///
+    /// let tree = HuffmanTree::new();
+    /// ```
     pub fn new() -> Self {
         Self {
             root: HuffmanTreeNode::new(),
         }
     }
 
+    /// Inserts a new symbol into the Huffman tree.
+    ///
+    /// # Arguments
+    ///
+    /// * `code` - The Huffman code for the symbol.
+    /// * `length` - The length of the Huffman code.
+    /// * `symbol` - The symbol to insert.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use mini_git::zlib::huffman::HuffmanTree;
+    ///
+    /// let mut tree = HuffmanTree::new();
+    /// tree.insert(0b1, 1, 'A');
+    /// tree.insert(0b01, 2, 'B');
+    /// ```
     pub fn insert(&mut self, code: usize, length: usize, symbol: char) {
         let mut node = &mut self.root;
 
@@ -69,6 +120,33 @@ impl HuffmanTree {
         node.symbol = Some(symbol);
     }
 
+    /// Decodes a symbol from the given `BitReader` using this Huffman tree.
+    ///
+    /// # Arguments
+    ///
+    /// * `reader` - The `BitReader` to read bits from.
+    ///
+    /// # Returns
+    ///
+    /// Returns `Some(char)` if a symbol was successfully decoded,
+    /// or `None` if decoding failed.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use mini_git::zlib::huffman::HuffmanTree;
+    /// use mini_git::zlib::bitreader::{BitReader, code_to_bytes};
+    ///
+    /// let mut tree = HuffmanTree::new();
+    /// tree.insert(0b1, 1, 'A');
+    /// tree.insert(0b01, 2, 'B');
+    ///
+    /// let bytes = code_to_bytes(0b101, 3);
+    /// let mut reader = BitReader::new(&bytes);
+    ///
+    /// assert_eq!(tree.decode(&mut reader), Some('A'));
+    /// assert_eq!(tree.decode(&mut reader), Some('B'));
+    /// ```
     pub fn decode(&self, reader: &mut BitReader) -> Option<char> {
         let mut node = &self.root;
 
@@ -95,6 +173,26 @@ impl HuffmanTree {
         node.symbol
     }
 
+    /// Constructs a Huffman tree from a list of bit lengths and an alphabet.
+    ///
+    /// # Arguments
+    ///
+    /// * `bitlen` - A slice of bit lengths for each symbol.
+    /// * `alphabet` - A slice of symbols corresponding to the bit lengths.
+    ///
+    /// # Returns
+    ///
+    /// Returns a new `HuffmanTree`.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use mini_git::zlib::huffman::HuffmanTree;
+    ///
+    /// let bitlen = &[2, 1, 3, 3];
+    /// let alphabet = &['A', 'B', 'C', 'D'];
+    /// let tree = HuffmanTree::from_bitlen_list(bitlen, alphabet);
+    /// ```
     pub fn from_bitlen_list(bitlen: &[usize], alphabet: &[char]) -> Self {
         let max_bits = *bitlen.iter().max().unwrap_or(&0);
         let bitlen_count: Vec<usize> = (0..=max_bits)
@@ -123,6 +221,27 @@ impl HuffmanTree {
             })
     }
 
+    /// Decodes two Huffman trees (literal/length and distance) from a `BitReader`.
+    ///
+    /// # Arguments
+    ///
+    /// * `reader` - The `BitReader` to read bits from.
+    ///
+    /// # Returns
+    ///
+    /// Returns a tuple of two `HuffmanTree`s: (literal/length tree, distance tree).
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// use mini_git::zlib::huffman::HuffmanTree;
+    /// use mini_git::zlib::bitreader::BitReader;
+    ///
+    /// // Example bit sequence, this is not enough to decode trees
+    /// let bytes = [0b10101010, 0b01010101];
+    /// let mut reader = BitReader::new(&bytes);
+    /// let (lit_tree, dist_tree) = HuffmanTree::decode_trees(&mut reader);
+    /// ```
     pub fn decode_trees(reader: &mut BitReader) -> (Self, Self) {
         // The number of Huffman LITeral/length codes
         let hlit = reader.read_bits(5) + 257;
@@ -198,12 +317,44 @@ impl HuffmanTree {
     }
 }
 
+/// Returns the alphabet for the literal/length Huffman tree.
+///
+/// # Returns
+///
+/// A `Vec<char>` containing the alphabet for the literal/length tree.
+///
+/// # Examples
+///
+/// ```
+/// use mini_git::zlib::huffman::literal_length_tree_alphabet;
+///
+/// let alphabet = literal_length_tree_alphabet();
+/// assert_eq!(alphabet.len(), 286);
+/// assert_eq!(alphabet[0], '\u{0}');
+/// assert_eq!(alphabet[285], '\u{11D}');
+/// ```
 pub fn literal_length_tree_alphabet() -> Vec<char> {
     (0u32..286u32)
         .map(|x| char::from_u32(x).expect("Should be able to make a char"))
         .collect::<Vec<char>>()
 }
 
+/// Returns the alphabet for the distance Huffman tree.
+///
+/// # Returns
+///
+/// A `Vec<char>` containing the alphabet for the distance tree.
+///
+/// # Examples
+///
+/// ```
+/// use mini_git::zlib::huffman::distance_tree_alphabet;
+///
+/// let alphabet = distance_tree_alphabet();
+/// assert_eq!(alphabet.len(), 30);
+/// assert_eq!(alphabet[0], '\u{0}');
+/// assert_eq!(alphabet[29], '\u{1D}');
+/// ```
 pub fn distance_tree_alphabet() -> Vec<char> {
     (0u8..30u8).map(|x| x as char).collect::<Vec<char>>()
 }
