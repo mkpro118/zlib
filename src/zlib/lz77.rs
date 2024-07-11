@@ -15,7 +15,7 @@ const DEFAULT_WINDOW_SIZE: usize = 144;
 
 #[derive(Debug)]
 pub struct LZ77Compressor {
-    pub window_size: usize,
+    window_size: usize,
     pub reference_prefix: char,
     pub reference_prefix_code: u8,
     pub reference_int_base: u8,
@@ -56,7 +56,7 @@ impl LZ77Compressor {
     }
 
     pub fn set_window_size(&mut self, newsize: usize) -> &mut Self {
-        self.window_size = newsize;
+        self.window_size = newsize.min(MAX_WINDOW_SIZE);
         self
     }
 
@@ -65,7 +65,12 @@ impl LZ77Compressor {
         let window_size = self.window_size;
 
         let mut pos = 0;
-        let last_pos = data.len() - self.min_string_length;
+        let last_pos = if data.len() > self.min_string_length {
+            data.len() - self.min_string_length
+        } else {
+            compressed.extend_from_slice(data);
+            return compressed;
+        };
 
         while pos < last_pos {
             let mut search_start = if pos > window_size {
@@ -227,5 +232,166 @@ mod tests {
             assert_eq!(raw_data.len(), compressed.len());
             assert_eq!(raw_data, compressed);
         }
+    }
+
+    #[test]
+    fn test_default() {
+        let compressor = LZ77Compressor::default();
+        assert_eq!(compressor.window_size, DEFAULT_WINDOW_SIZE);
+        assert_eq!(compressor.reference_prefix, REFERENCE_PREFIX);
+        assert_eq!(compressor.reference_prefix_code, REFERENCE_PREFIX_CODE);
+        assert_eq!(compressor.reference_int_base, REFERENCE_INT_BASE);
+        assert_eq!(
+            compressor.reference_int_floor_code,
+            REFERENCE_INT_FLOOR_CODE
+        );
+        assert_eq!(compressor.reference_int_ceil_code, REFERENCE_INT_CEIL_CODE);
+        assert_eq!(compressor.max_string_distance, DEFAULT_MAX_STRING_DISTANCE);
+        assert_eq!(compressor.min_string_length, DEFAULT_MIN_STRING_LENGTH);
+        assert_eq!(compressor.max_string_length, DEFAULT_MAX_STRING_LENGTH);
+    }
+
+    #[test]
+    fn test_new() {
+        let compressor = LZ77Compressor::new();
+        assert_eq!(compressor.window_size, DEFAULT_WINDOW_SIZE);
+    }
+
+    #[test]
+    fn test_with_window_size() {
+        let compressor = LZ77Compressor::with_window_size(1024);
+        assert_eq!(compressor.window_size, 1024);
+    }
+
+    #[test]
+    fn test_with_window_size_too_large() {
+        let compressor = LZ77Compressor::with_window_size(MAX_WINDOW_SIZE + 1);
+        assert_eq!(compressor.window_size, MAX_WINDOW_SIZE);
+    }
+
+    #[test]
+    fn test_set_window_size() {
+        let mut compressor = LZ77Compressor::default();
+        compressor.set_window_size(1024);
+        assert_eq!(compressor.window_size, 1024);
+    }
+
+    #[test]
+    fn test_set_window_size_too_large() {
+        let mut compressor = LZ77Compressor::default();
+        compressor.set_window_size(MAX_WINDOW_SIZE + 1);
+        assert_eq!(compressor.window_size, MAX_WINDOW_SIZE);
+    }
+
+    #[test]
+    fn test_compress_empty_input() {
+        let compressor = LZ77Compressor::default();
+        let input = vec![];
+        let compressed = compressor.compress(&input);
+        assert_eq!(compressed, input);
+    }
+
+    #[test]
+    fn test_compress_small_input() {
+        let compressor = LZ77Compressor::default();
+        let input = b"abcde".to_vec();
+        let compressed = compressor.compress(&input);
+        assert!(!compressed.is_empty());
+        assert!(compressed.len() <= input.len());
+    }
+
+    #[test]
+    fn test_compress_large_input() {
+        let compressor = LZ77Compressor::default();
+        let input = b"abcdefghijklmnopqrstuvwxyz".repeat(1000);
+        let compressed = compressor.compress(&input);
+        assert!(!compressed.is_empty());
+        assert!(compressed.len() < input.len());
+    }
+
+    #[test]
+    fn test_encode_reference_int() {
+        let compressor = LZ77Compressor::default();
+
+        // Test small values
+        assert_eq!(compressor.encode_reference_int(0, 1), vec![b' ']);
+        assert_eq!(compressor.encode_reference_int(1, 1), vec![b'!']);
+
+        // Test larger values
+        assert_eq!(compressor.encode_reference_int(31, 1), vec![b'?']);
+        // assert_eq!(compressor.encode_reference_int(32, 2), vec![b' ', b'!']);
+
+        // Test maximum value for width
+        assert_eq!(compressor.encode_reference_int(94, 1), vec![b'~']);
+    }
+
+    #[test]
+    #[should_panic(expected = "Reference value out of range")]
+    fn test_encode_reference_int_out_of_range() {
+        let compressor = LZ77Compressor::default();
+        compressor.encode_reference_int(95, 1);
+    }
+
+    #[test]
+    fn test_encode_reference_length() {
+        let compressor = LZ77Compressor::default();
+
+        // Test minimum length
+        assert_eq!(
+            compressor.encode_reference_length(DEFAULT_MIN_STRING_LENGTH),
+            vec![b' ']
+        );
+
+        // Test some regular lengths
+        assert_eq!(
+            compressor.encode_reference_length(DEFAULT_MIN_STRING_LENGTH + 1),
+            vec![b'!']
+        );
+        assert_eq!(
+            compressor.encode_reference_length(DEFAULT_MIN_STRING_LENGTH + 31),
+            vec![b'?']
+        );
+
+        // Test maximum length
+        assert_eq!(
+            compressor.encode_reference_length(DEFAULT_MIN_STRING_LENGTH + 90),
+            vec![b'z']
+        );
+    }
+
+    #[test]
+    #[should_panic(expected = "Reference value out of range")]
+    fn test_encode_reference_length_too_large() {
+        let compressor = LZ77Compressor::default();
+        compressor.encode_reference_length(DEFAULT_MIN_STRING_LENGTH + 96);
+    }
+
+    #[test]
+    fn test_compress_with_different_window_sizes() {
+        let input = b"abcdefghijklmnopqrstuvwxyz".repeat(100);
+        let small_window = LZ77Compressor::with_window_size(64);
+        let large_window = LZ77Compressor::with_window_size(1024);
+
+        let compressed_small = small_window.compress(&input);
+        let compressed_large = large_window.compress(&input);
+
+        assert!(compressed_small.len() > compressed_large.len());
+    }
+
+    #[test]
+    fn test_compress_worst_case() {
+        let compressor = LZ77Compressor::default();
+        let input: Vec<u8> = (0..255).collect();
+        let compressed = compressor.compress(&input);
+        assert!(compressed.len() >= input.len());
+    }
+
+    #[test]
+    fn test_compress_best_case() {
+        let compressor = LZ77Compressor::default();
+        let input = vec![b'a'; 1000];
+        let compressed = compressor.compress(&input);
+        dbg!(compressed.len());
+        assert!(compressed.len() < input.len() / 5);
     }
 }
