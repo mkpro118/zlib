@@ -16,9 +16,11 @@
 //! ```
 
 use core::cmp::Ordering;
-use std::collections::{BinaryHeap, HashMap};
+use std::collections::{BinaryHeap, HashMap, VecDeque};
 
 use crate::zlib::bitreader::BitReader;
+// use crate::zlib::bitwriter::BitWriter;
+
 use crate::zlib::lz77::LZ77Compressor;
 
 /// The order of code length codes used in Huffman tree construction.
@@ -66,6 +68,9 @@ struct FreqNode(usize, HuffmanTreeNode);
 pub struct HuffmanTree {
     /// The root node of the Huffman tree.
     root: HuffmanTreeNode,
+
+    /// A cache for encoding
+    map: Option<HashMap<char, (usize, usize)>>,
 }
 
 impl HuffmanTreeNode {
@@ -126,6 +131,7 @@ impl HuffmanTree {
     pub fn new() -> Self {
         Self {
             root: HuffmanTreeNode::new(),
+            map: None,
         }
     }
 
@@ -162,8 +168,10 @@ impl HuffmanTree {
             heap.push(parent);
         }
 
+        let root = heap.pop().expect("Should have at least one element").1;
         Self {
-            root: heap.pop().expect("Should have at least one element").1,
+            root,
+            ..Self::default()
         }
     }
 
@@ -497,6 +505,36 @@ impl HuffmanTree {
             Self::from_bitlen_list(&bitlen[hlit..], &distance_tree_alphabet());
 
         (lit_tree, dist_tree)
+    }
+
+    pub fn assign(&mut self) {
+        if self.map.is_none() {
+            self.map = Some(HashMap::new());
+        }
+
+        let map = self.map.as_mut().expect("Map should exist");
+
+        let mut queue = VecDeque::new();
+
+        queue.push_front((&self.root, 0usize, 0usize));
+
+        while let Some((node, code, length)) = queue.pop_front() {
+            if let Some(sym) = node.symbol {
+                map.insert(sym, (code, length));
+            } else {
+                if let Some(ref left) = node.left {
+                    queue.push_back((left, code << 1, length + 1));
+                }
+
+                if let Some(ref right) = node.right {
+                    queue.push_back((right, (code << 1) | 1, length + 1));
+                }
+            }
+        }
+    }
+
+    pub fn encode(&self, symbol: char) -> Option<(usize, usize)> {
+        self.map.as_ref()?.get(&symbol).copied()
     }
 }
 
