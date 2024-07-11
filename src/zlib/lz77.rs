@@ -476,7 +476,7 @@ mod tests {
     #[should_panic(expected = "Reference value out of range")]
     fn test_encode_reference_int_out_of_range() {
         let compressor = LZ77Compressor::default();
-        compressor.encode_reference_int(95, 1);
+        let _ = compressor.encode_reference_int(95, 1);
     }
 
     #[test]
@@ -510,7 +510,8 @@ mod tests {
     #[should_panic(expected = "Reference value out of range")]
     fn test_encode_reference_length_too_large() {
         let compressor = LZ77Compressor::default();
-        compressor.encode_reference_length(DEFAULT_MIN_STRING_LENGTH + 96);
+        let _ =
+            compressor.encode_reference_length(DEFAULT_MIN_STRING_LENGTH + 96);
     }
 
     #[test]
