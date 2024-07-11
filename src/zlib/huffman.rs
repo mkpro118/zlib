@@ -242,6 +242,55 @@ impl HuffmanTree {
         (Self::from_freq(sym_freq), Self::from_freq(dist_freq))
     }
 
+    /// Constructs a Huffman tree from a list of bit lengths and an alphabet.
+    ///
+    /// # Arguments
+    ///
+    /// * `bitlen` - A slice of bit lengths for each symbol.
+    /// * `alphabet` - A slice of symbols corresponding to the bit lengths.
+    ///
+    /// # Returns
+    ///
+    /// Returns a new `HuffmanTree`.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use mini_git::zlib::huffman::HuffmanTree;
+    ///
+    /// let bitlen = &[2, 1, 3, 3];
+    /// let alphabet = &['A', 'B', 'C', 'D'];
+    /// let tree = HuffmanTree::from_bitlen_list(bitlen, alphabet);
+    /// ```
+    #[must_use]
+    pub fn from_bitlen_list(bitlen: &[usize], alphabet: &[char]) -> Self {
+        let max_bits = *bitlen.iter().max().unwrap_or(&0);
+        let bitlen_count: Vec<usize> = (0..=max_bits)
+            .map(|y| {
+                if y == 0 {
+                    0
+                } else {
+                    bitlen.iter().filter(|&x| *x == y).count()
+                }
+            })
+            .collect();
+
+        let mut next_code = (1..max_bits).fold(vec![0, 0], |mut acc, bits| {
+            acc.push((acc[bits] + bitlen_count[bits]) << 1);
+            acc
+        });
+
+        bitlen
+            .iter()
+            .zip(alphabet.iter())
+            .filter(|(&bl, _)| bl != 0)
+            .fold(Self::new(), |mut tree, (&bl, &c)| {
+                tree.insert(next_code[bl], bl, c);
+                next_code[bl] += 1;
+                tree
+            })
+    }
+
     /// Inserts a new symbol into the Huffman tree.
     ///
     /// # Arguments
@@ -349,55 +398,6 @@ impl HuffmanTree {
         }
 
         node.symbol
-    }
-
-    /// Constructs a Huffman tree from a list of bit lengths and an alphabet.
-    ///
-    /// # Arguments
-    ///
-    /// * `bitlen` - A slice of bit lengths for each symbol.
-    /// * `alphabet` - A slice of symbols corresponding to the bit lengths.
-    ///
-    /// # Returns
-    ///
-    /// Returns a new `HuffmanTree`.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// use mini_git::zlib::huffman::HuffmanTree;
-    ///
-    /// let bitlen = &[2, 1, 3, 3];
-    /// let alphabet = &['A', 'B', 'C', 'D'];
-    /// let tree = HuffmanTree::from_bitlen_list(bitlen, alphabet);
-    /// ```
-    #[must_use]
-    pub fn from_bitlen_list(bitlen: &[usize], alphabet: &[char]) -> Self {
-        let max_bits = *bitlen.iter().max().unwrap_or(&0);
-        let bitlen_count: Vec<usize> = (0..=max_bits)
-            .map(|y| {
-                if y == 0 {
-                    0
-                } else {
-                    bitlen.iter().filter(|&x| *x == y).count()
-                }
-            })
-            .collect();
-
-        let mut next_code = (1..max_bits).fold(vec![0, 0], |mut acc, bits| {
-            acc.push((acc[bits] + bitlen_count[bits]) << 1);
-            acc
-        });
-
-        bitlen
-            .iter()
-            .zip(alphabet.iter())
-            .filter(|(&bl, _)| bl != 0)
-            .fold(Self::new(), |mut tree, (&bl, &c)| {
-                tree.insert(next_code[bl], bl, c);
-                next_code[bl] += 1;
-                tree
-            })
     }
 
     /// Decodes two Huffman trees (literal/length and distance) from a `BitReader`.
