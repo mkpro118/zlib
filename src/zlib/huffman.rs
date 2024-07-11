@@ -52,6 +52,12 @@ impl HuffmanTreeNode {
     }
 }
 
+impl Default for HuffmanTree {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl HuffmanTree {
     /// Creates a new `HuffmanTree`.
     ///
@@ -62,6 +68,7 @@ impl HuffmanTree {
     ///
     /// let tree = HuffmanTree::new();
     /// ```
+    #[must_use]
     pub fn new() -> Self {
         Self {
             root: HuffmanTreeNode::new(),
@@ -75,6 +82,10 @@ impl HuffmanTree {
     /// * `code` - The Huffman code for the symbol.
     /// * `length` - The length of the Huffman code.
     /// * `symbol` - The symbol to insert.
+    ///
+    /// # Panics
+    ///
+    /// If creating a new node fails for any reason.
     ///
     /// # Examples
     ///
@@ -193,6 +204,7 @@ impl HuffmanTree {
     /// let alphabet = &['A', 'B', 'C', 'D'];
     /// let tree = HuffmanTree::from_bitlen_list(bitlen, alphabet);
     /// ```
+    #[must_use]
     pub fn from_bitlen_list(bitlen: &[usize], alphabet: &[char]) -> Self {
         let max_bits = *bitlen.iter().max().unwrap_or(&0);
         let bitlen_count: Vec<usize> = (0..=max_bits)
@@ -230,6 +242,10 @@ impl HuffmanTree {
     /// # Returns
     ///
     /// Returns a tuple of two `HuffmanTree`s: (literal/length tree, distance tree).
+    ///
+    /// # Panics
+    ///
+    /// If data stream is invalid
     ///
     /// # Examples
     ///
@@ -323,6 +339,10 @@ impl HuffmanTree {
 ///
 /// A `Vec<char>` containing the alphabet for the literal/length tree.
 ///
+/// # Panics
+///
+/// If conversion from u32 to char fails (It should never fail)
+///
 /// # Examples
 ///
 /// ```
@@ -333,6 +353,7 @@ impl HuffmanTree {
 /// assert_eq!(alphabet[0], '\u{0}');
 /// assert_eq!(alphabet[285], '\u{11D}');
 /// ```
+#[must_use]
 pub fn literal_length_tree_alphabet() -> Vec<char> {
     (0u32..286u32)
         .map(|x| char::from_u32(x).expect("Should be able to make a char"))
@@ -355,6 +376,7 @@ pub fn literal_length_tree_alphabet() -> Vec<char> {
 /// assert_eq!(alphabet[0], '\u{0}');
 /// assert_eq!(alphabet[29], '\u{1D}');
 /// ```
+#[must_use]
 pub fn distance_tree_alphabet() -> Vec<char> {
     (0u8..30u8).map(|x| x as char).collect::<Vec<char>>()
 }

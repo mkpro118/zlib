@@ -1,5 +1,5 @@
 //! This module provides functionality for decompressing DEFLATE-compressed data.
-//! Inspired from: https://pyokagan.name/blog/2019-10-18-zlibinflate/
+//! Inspired from: [this article](https://pyokagan.name/blog/2019-10-18-zlibinflate/)
 
 use crate::zlib::bitreader::BitReader;
 use crate::zlib::huffman::{

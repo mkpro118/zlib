@@ -24,6 +24,13 @@ pub struct BitWriter {
     numbits: usize,
 }
 
+impl Default for BitWriter {
+    /// Creates a default `BitWriter`
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl BitWriter {
     /// Creates a new `BitWriter`.
     ///
@@ -34,6 +41,7 @@ impl BitWriter {
     ///
     /// let writer = BitWriter::new();
     /// ```
+    #[must_use]
     pub fn new() -> Self {
         Self {
             buffer: Vec::new(),
@@ -80,6 +88,7 @@ impl BitWriter {
     /// let result = writer.finish();
     /// assert_eq!(result, vec![0b1010_1110]);
     /// ```
+    #[allow(clippy::missing_panics_doc)]
     pub fn write_bits(&mut self, mut value: usize, mut num_bits: usize) {
         while num_bits > 0 {
             self.write_bit(
@@ -135,6 +144,11 @@ impl BitWriter {
     /// This method is called automatically by `finish()`, but can be called
     /// manually if needed.
     ///
+    /// # Panics
+    ///
+    /// If the `BitWriter` is in invalid state. This is more of a sanity check
+    /// than a possible manual manipulation error.
+    ///
     /// # Examples
     ///
     /// ```
@@ -171,6 +185,7 @@ impl BitWriter {
     /// let result = writer.finish();
     /// assert_eq!(result, vec![0b11010000, 0xA5]);
     /// ```
+    #[must_use]
     pub fn finish(mut self) -> Vec<u8> {
         self.flush_byte();
         self.buffer

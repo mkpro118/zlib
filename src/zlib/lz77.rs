@@ -89,6 +89,7 @@ impl LZ77Compressor {
     ///
     /// let compressor = LZ77Compressor::new();
     /// ```
+    #[must_use]
     pub fn new() -> Self {
         Self::default()
     }
@@ -107,6 +108,7 @@ impl LZ77Compressor {
     /// let compressor = LZ77Compressor::with_window_size(1024);
     /// assert_eq!(compressor.window_size, 1024);
     /// ```
+    #[must_use]
     pub fn with_window_size(window_size: usize) -> Self {
         let window_size = window_size.min(MAX_WINDOW_SIZE);
         Self {
@@ -159,6 +161,7 @@ impl LZ77Compressor {
     /// let compressed = compressor.compress(data);
     /// assert!(compressed.len() < data.len());
     /// ```
+    #[must_use]
     pub fn compress(&self, data: &[u8]) -> Vec<u8> {
         let mut compressed: Vec<u8> = vec![];
         let window_size = self.window_size;
