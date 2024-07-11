@@ -514,21 +514,17 @@ fn check_lz77(lz77: &LZ77Compressor) {
 }
 
 pub fn get_length_code(length: usize) -> usize {
-    LENGTH_BASE
-        .iter()
-        .enumerate()
-        .find(|&(_, &base)| length <= base)
-        .map(|(i, _)| i + 257)
-        .unwrap_or_else(|| panic!("Invalid length: {}", length))
+    match LENGTH_BASE.binary_search(&length) {
+        Ok(index) => index + 257,
+        Err(index) => index + 256,
+    }
 }
 
 pub fn get_distance_code(distance: usize) -> usize {
-    DISTANCE_BASE
-        .iter()
-        .enumerate()
-        .find(|&(_, &base)| distance <= base)
-        .map(|(i, _)| i)
-        .unwrap_or_else(|| panic!("Invalid distance: {}", distance))
+    match DISTANCE_BASE.binary_search(&distance) {
+        Ok(index) => index,
+        Err(index) => index - 1,
+    }
 }
 
 #[cfg(test)]
