@@ -16,7 +16,7 @@
 //! ```
 
 use core::cmp::Ordering;
-use std::collections::HashMap;
+use std::collections::{BinaryHeap, HashMap};
 
 use crate::zlib::bitreader::BitReader;
 use crate::zlib::lz77::LZ77Compressor;
@@ -77,6 +77,13 @@ impl HuffmanTreeNode {
             right: None,
         }
     }
+
+    pub fn from(symbol: char) -> Self {
+        Self {
+            symbol: Some(symbol),
+            ..Self::new()
+        }
+    }
 }
 
 impl PartialEq for FreqNode {
@@ -132,9 +139,29 @@ impl HuffmanTree {
         Self::from_freq(map)
     }
 
-    pub fn from_freq(_frequencies: HashMap<char, usize>) -> Self {
-        let tree = Self::new();
-        tree
+    pub fn from_freq(frequencies: HashMap<char, usize>) -> Self {
+        // Convert hashmap to binary heap friendly data structure
+        let mut heap = frequencies
+            .into_iter()
+            .map(|(sym, count)| FreqNode(count, HuffmanTreeNode::from(sym)))
+            .collect::<BinaryHeap<FreqNode>>();
+
+        // Build the huffman tree using the Huffman Encoding algorithm
+        while heap.len() > 1 {
+            let left = heap.pop().expect("Should exist as size is at least 2");
+            let right = heap.pop().expect("Should exist as size is at least 2");
+
+            let mut parent = HuffmanTreeNode::new();
+            parent.left = Some(Box::new(left.1));
+            parent.right = Some(Box::new(right.1));
+
+            let parent = FreqNode(left.0 + right.0, parent);
+            heap.push(parent);
+        }
+
+        Self {
+            root: heap.pop().expect("Should have at least one element").1,
+        }
     }
 
     pub fn from_lz77(data: &[u8], lz77: &LZ77Compressor) -> (Self, Self) {
