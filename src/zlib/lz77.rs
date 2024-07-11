@@ -1,8 +1,6 @@
 #![allow(dead_code)]
 
-use std::{cmp::Ordering, collections::VecDeque, ops::Sub, os::windows};
-
-use crate::zlib::bitwriter::BitWriter;
+use std::collections::VecDeque;
 
 const REFERENCE_PREFIX: char = '`';
 const REFERENCE_PREFIX_CODE: u8 = REFERENCE_PREFIX as u8;
