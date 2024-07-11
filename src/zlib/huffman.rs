@@ -15,12 +15,36 @@
 //! // You can now use this tree for encoding or decoding
 //! ```
 
+use std::collections::HashMap;
+
 use crate::zlib::bitreader::BitReader;
+use crate::zlib::lz77::LZ77Compressor;
 
 /// The order of code length codes used in Huffman tree construction.
 static CODE_LENGTH_CODES_ORDER: [usize; 19] = [
     16, 17, 18, 0, 8, 7, 9, 6, 10, 5, 11, 4, 12, 3, 13, 2, 14, 1, 15,
 ];
+
+pub static LENGTH_EXTRA_BITS: [usize; 29] = [
+    0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3, 4, 4, 4, 4, 5,
+    5, 5, 5, 0,
+];
+pub static LENGTH_BASE: [usize; 29] = [
+    3, 4, 5, 6, 7, 8, 9, 10, 11, 13, 15, 17, 19, 23, 27, 31, 35, 43, 51, 59,
+    67, 83, 99, 115, 131, 163, 195, 227, 258,
+];
+pub static DISTANCE_EXTRA_BITS: [usize; 30] = [
+    0, 0, 0, 0, 1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6, 7, 7, 8, 8, 9, 9, 10, 10,
+    11, 11, 12, 12, 13, 13,
+];
+pub static DISTANCE_BASE: [usize; 30] = [
+    1, 2, 3, 4, 5, 7, 9, 13, 17, 25, 33, 49, 65, 97, 129, 193, 257, 385, 513,
+    769, 1025, 1537, 2049, 3073, 4097, 6145, 8193, 12289, 16385, 24577,
+];
+
+pub const ZLIB_WINDOW_SIZE: usize = 1 << 15;
+pub const ZLIB_MIN_STRING_LENGTH: usize = 3;
+pub const ZLIB_MAX_STRING_LENGTH: usize = 258;
 
 /// Represents a node in the Huffman tree.
 #[derive(Debug)]
@@ -73,6 +97,89 @@ impl HuffmanTree {
         Self {
             root: HuffmanTreeNode::new(),
         }
+    }
+
+    pub fn from_data(_data: &[u8]) -> Self {
+        let tree = Self::new();
+        tree
+    }
+
+    pub fn from_freq(_frequencies: HashMap<char, usize>) -> Self {
+        let tree = Self::new();
+        tree
+    }
+
+    pub fn from_lz77(data: &[u8], lz77: &LZ77Compressor) -> (Self, Self) {
+        check_lz77(lz77);
+
+        let mut sym_freq = [0usize; 286];
+        let mut dist_freq = [0usize; 30];
+
+        let mut count_sym = |byte: usize| sym_freq[byte] += 1;
+        let mut count_dist = |byte| dist_freq[byte as usize] += 1;
+
+        let mut idx = 0;
+
+        while idx < data.len() {
+            let byte = data[idx];
+            // Handle reference bytes
+            if byte == lz77.reference_prefix_code {
+                match data.get(idx + 1) {
+                    Some(&x) if x == lz77.reference_prefix_code => {
+                        // If next byte is also reference code,
+                        // this was an "escape" sequence for the literal
+                        // prefix_code represents
+                        count_sym(byte as usize);
+
+                        // Skip next byte
+                        idx += 1;
+                    }
+                    _ => {
+                        // This is the case where we need to decode
+                        // reference int
+                        let distance = lz77.decode_reference_int(
+                            &data[(idx + 1)..(idx + 3)],
+                            2,
+                        );
+                        let length = lz77.decode_reference_length(
+                            &data[(idx + 3)..(idx + 4)],
+                        );
+
+                        let length_code = get_length_code(length);
+                        let distance_code = get_distance_code(distance);
+
+                        count_sym(length_code);
+                        count_dist(distance_code);
+                    }
+                }
+            } else {
+                count_sym(byte as usize);
+            }
+            idx += 1;
+        }
+
+        // convert arrays to hashmaps
+        let sym_freq = sym_freq.into_iter().enumerate().fold(
+            HashMap::new(),
+            |mut map, (sym, count)| {
+                let sym =
+                    char::from_u32(sym as u32).expect("Should convert to char");
+                map.insert(sym, count);
+                map
+            },
+        );
+
+        let dist_freq = dist_freq.into_iter().enumerate().fold(
+            HashMap::new(),
+            |mut map, (sym, count)| {
+                let sym =
+                    char::from_u32(sym as u32).expect("Should convert to char");
+                map.insert(sym, count);
+                map
+            },
+        );
+
+        (Self::from_freq(sym_freq), Self::from_freq(dist_freq))
     }
 
     /// Inserts a new symbol into the Huffman tree.
@@ -379,6 +486,44 @@ pub fn literal_length_tree_alphabet() -> Vec<char> {
 #[must_use]
 pub fn distance_tree_alphabet() -> Vec<char> {
     (0u8..30u8).map(|x| x as char).collect::<Vec<char>>()
+}
+
+fn check_lz77(lz77: &LZ77Compressor) {
+    assert_eq!(
+        lz77.window_size, ZLIB_WINDOW_SIZE,
+        "Incompatible LZ77 window size, required {}, found {}",
+        ZLIB_WINDOW_SIZE, lz77.window_size
+    );
+
+    assert_eq!(
+        lz77.min_string_length, ZLIB_MIN_STRING_LENGTH,
+        "Incompatible LZ77 min string length, required {}, found {}",
+        ZLIB_MIN_STRING_LENGTH, lz77.min_string_length
+    );
+
+    assert_eq!(
+        lz77.max_string_length, ZLIB_MAX_STRING_LENGTH,
+        "Incompatible LZ77 max string length, required {}, found {}",
+        ZLIB_MAX_STRING_LENGTH, lz77.max_string_length
+    );
+}
+
+pub fn get_length_code(length: usize) -> usize {
+    LENGTH_BASE
+        .iter()
+        .enumerate()
+        .find(|&(_, &base)| length <= base)
+        .map(|(i, _)| i + 257)
+        .unwrap_or_else(|| panic!("Invalid length: {}", length))
+}
+
+pub fn get_distance_code(distance: usize) -> usize {
+    DISTANCE_BASE
+        .iter()
+        .enumerate()
+        .find(|&(_, &base)| distance <= base)
+        .map(|(i, _)| i)
+        .unwrap_or_else(|| panic!("Invalid distance: {}", distance))
 }
 
 #[cfg(test)]
