@@ -1,8 +1,5 @@
-// Inspired from: https://pyokagan.name/blog/2019-10-18-zlibinflate/
-
-#![allow(clippy::missing_errors_doc)]
-#![allow(clippy::missing_panics_doc)]
-#![allow(missing_docs)]
+//! This module provides functionality for decompressing DEFLATE-compressed data.
+//! Inspired from: https://pyokagan.name/blog/2019-10-18-zlibinflate/
 
 use crate::zlib::bitreader::BitReader;
 use crate::zlib::huffman::{
@@ -26,6 +23,29 @@ static DISTANCE_BASE: [usize; 30] = [
     769, 1025, 1537, 2049, 3073, 4097, 6145, 8193, 12289, 16385, 24577,
 ];
 
+/// Decompresses DEFLATE-compressed data.
+///
+/// This function takes a slice of compressed bytes and returns a vector of decompressed bytes.
+///
+/// # Examples
+///
+/// ```
+/// use mini_git::zlib::decompress;
+///
+/// let compressed_data = vec![0x78, 0x9C, 0x4B, 0xCE, 0xCF, 0x2D, 0x28, 0x4A,
+///     0x2D, 0x2E, 0x4E, 0x4D, 0x01, 0x00, 0x14, 0x81, 0x03, 0x7D];
+/// let decompressed_data = decompress(&compressed_data).unwrap();
+/// assert_eq!(decompressed_data, b"compressed");
+/// ```
+///
+/// # Errors
+///
+/// This function will return an error if:
+/// - The compression method is not DEFLATE (CM != 8)
+/// - The compression info is invalid (CINFO > 7)
+/// - The CMF and FLAGS checksum is invalid
+/// - A preset dictionary is used (not supported)
+/// - The block type is invalid
 pub fn decompress(input: &[u8]) -> Result<Vec<u8>, String> {
     let mut reader = BitReader::new(input);
 
@@ -72,6 +92,13 @@ pub fn decompress(input: &[u8]) -> Result<Vec<u8>, String> {
     Ok(inflated)
 }
 
+/// Inflates DEFLATE-compressed data.
+///
+/// This function is called by `decompress` to handle the actual inflation process.
+///
+/// # Errors
+///
+/// This function will return an error if an invalid block type is encountered.
 fn inflate(reader: &mut BitReader) -> Result<Vec<u8>, String> {
     let mut buffer: Vec<u8> = vec![];
 
@@ -95,6 +122,9 @@ fn inflate(reader: &mut BitReader) -> Result<Vec<u8>, String> {
     Ok(buffer)
 }
 
+/// Inflates an uncompressed block.
+///
+/// This function is called by `inflate` when an uncompressed block is encountered.
 #[allow(unused_variables)]
 fn inflate_block_no_compression(reader: &mut BitReader, buffer: &mut Vec<u8>) {
     // Length of the data
@@ -106,7 +136,9 @@ fn inflate_block_no_compression(reader: &mut BitReader, buffer: &mut Vec<u8>) {
     buffer.extend((0..len).map(|_| reader.read_byte()));
 }
 
-/// Decompress block with fixed huffman codes
+/// Inflates a block compressed with fixed Huffman codes.
+///
+/// This function is called by `inflate` when a block with fixed Huffman codes is encountered.
 fn inflate_block_fixed(reader: &mut BitReader, buffer: &mut Vec<u8>) {
     let mut bitlen = vec![8; 144];
     bitlen.extend_from_slice(&[9].repeat(256 - 144));
@@ -122,7 +154,9 @@ fn inflate_block_fixed(reader: &mut BitReader, buffer: &mut Vec<u8>) {
     inflate_block_data(reader, &literal_tree, &distance_tree, buffer);
 }
 
-/// Decompress block with dynamic huffman codes
+/// Inflates a block compressed with dynamic Huffman codes.
+///
+/// This function is called by `inflate` when a block with dynamic Huffman codes is encountered.
 fn inflate_block_dynamic(reader: &mut BitReader, buffer: &mut Vec<u8>) {
     let (literal_length_tree, distance_tree) =
         HuffmanTree::decode_trees(reader);
