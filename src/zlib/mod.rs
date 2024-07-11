@@ -1,8 +1,8 @@
-mod bitreader;
-mod bitwriter;
+pub mod bitreader;
+pub mod bitwriter;
 pub mod compress;
 pub mod decompress;
-mod huffman;
-mod lz77;
+pub mod huffman;
+pub mod lz77;
 
 pub use decompress::*;
