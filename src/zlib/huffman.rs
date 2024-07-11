@@ -15,6 +15,7 @@
 //! // You can now use this tree for encoding or decoding
 //! ```
 
+use core::cmp::Ordering;
 use std::collections::HashMap;
 
 use crate::zlib::bitreader::BitReader;
@@ -57,6 +58,8 @@ struct HuffmanTreeNode {
     right: Option<Box<HuffmanTreeNode>>,
 }
 
+struct FreqNode(usize, HuffmanTreeNode);
+
 /// Represents a Huffman tree used for encoding and decoding.
 #[derive(Debug)]
 #[allow(clippy::module_name_repetitions)]
@@ -73,6 +76,26 @@ impl HuffmanTreeNode {
             left: None,
             right: None,
         }
+    }
+}
+
+impl PartialEq for FreqNode {
+    fn eq(&self, other: &Self) -> bool {
+        other.0.eq(&self.0)
+    }
+}
+
+impl Eq for FreqNode {}
+
+impl Ord for FreqNode {
+    fn cmp(&self, other: &Self) -> Ordering {
+        other.0.cmp(&self.0)
+    }
+}
+
+impl PartialOrd for FreqNode {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
     }
 }
 
