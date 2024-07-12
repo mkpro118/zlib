@@ -37,9 +37,9 @@ pub fn compress(data: &[u8], strategy: &Strategy) -> Vec<u8> {
     bitwriter.write_byte(flg);
 
     match strategy {
-        Dynamic => compress_dynamic(&mut bitwriter, &data),
-        Fixed => compress_fixed(&mut bitwriter, &data),
-        Raw => compress_raw(&mut bitwriter, &data),
+        Dynamic => compress_dynamic(&mut bitwriter, data),
+        Fixed => compress_fixed(&mut bitwriter, data),
+        Raw => compress_raw(&mut bitwriter, data),
         Auto => {}
     };
 
