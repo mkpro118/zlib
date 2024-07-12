@@ -190,40 +190,21 @@ impl HuffmanTree {
 
         while idx < data.len() {
             let byte = data[idx];
-            // Handle reference bytes
-            if byte == lz77.reference_prefix_code {
-                match data.get(idx + 1) {
-                    Some(&x) if x == lz77.reference_prefix_code => {
-                        // If next byte is also reference code,
-                        // this was an "escape" sequence for the literal
-                        // prefix_code represents
-                        count_sym(byte as usize);
+            let (is_reference, _idx, reference_data) =
+                lz77.is_reference_byte(data, idx);
+            if is_reference {
+                let Some((distance, length)) = reference_data else {
+                    panic!("Invalid return value from is_reference_byte!!");
+                };
+                let length_code = get_length_code(length);
+                let distance_code = get_distance_code(distance);
 
-                        // Skip next byte
-                        idx += 1;
-                    }
-                    _ => {
-                        // This is the case where we need to decode
-                        // reference int
-                        let distance = lz77.decode_reference_int(
-                            &data[(idx + 1)..(idx + 3)],
-                            2,
-                        );
-                        let length = lz77.decode_reference_length(
-                            &data[(idx + 3)..(idx + 4)],
-                        );
-
-                        let length_code = get_length_code(length);
-                        let distance_code = get_distance_code(distance);
-
-                        count_sym(length_code);
-                        count_dist(distance_code);
-                    }
-                }
+                count_sym(length_code);
+                count_dist(distance_code);
             } else {
                 count_sym(byte as usize);
             }
-            idx += 1;
+            idx = _idx;
         }
 
         // convert arrays to hashmaps
