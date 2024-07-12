@@ -1,9 +1,9 @@
-use crate::zlib::huffman::{
-    ZLIB_MAX_STRING_LENGTH, ZLIB_MIN_STRING_LENGTH, ZLIB_WINDOW_SIZE,
-};
+use crate::zlib::huffman::*;
 use crate::zlib::lz77::LZ77Compressor;
 
 use super::bitwriter::BitWriter;
+
+const SIXTEEN_KB: usize = 16 * 1024;
 
 pub enum Strategy {
     Auto,
@@ -16,20 +16,35 @@ pub enum Strategy {
 pub fn compress(data: &[u8], strategy: &Strategy) -> Vec<u8> {
     use Strategy::{Auto, Dynamic, Fixed, Raw};
 
-    let mut compressor = LZ77Compressor::with_window_size(ZLIB_WINDOW_SIZE);
-    compressor.min_string_length = ZLIB_MIN_STRING_LENGTH;
-    compressor.max_string_length = ZLIB_MAX_STRING_LENGTH;
-    compressor.max_string_distance = ZLIB_WINDOW_SIZE;
-
-    let data = compressor.compress(data);
-
     let mut bitwriter = BitWriter::new();
+
+    const COMPRESSION_METHOD: u8 = 0b0000_1000;
+    const COMPRESSION_INFO: u8 = 0b0111_0000;
+    let cmf = COMPRESSION_INFO | COMPRESSION_METHOD;
+    bitwriter.write_byte(cmf);
+
+    let fcheck = 31 - (((cmf as usize) * 256) % 31);
+    assert!(
+        fcheck & 0b111_00000 == 0,
+        "Incorrect FCHECK, more than 5 bits!!"
+    );
+
+    // Clear the FDICT and FLEVEL bits;
+    const FDICT_MASK: u8 = 0b00_1_00000;
+    const FLEVEL_MASK: u8 = 0b11_000000;
+    const NO_FDICT_AND_FLEVEL: u8 = !(FDICT_MASK | FLEVEL_MASK);
+    let flg = (fcheck as u8) & NO_FDICT_AND_FLEVEL;
+    bitwriter.write_byte(flg);
+
     match strategy {
-        Dynamic => compress_dynamic(&mut bitwriter, &data, &compressor),
+        Dynamic => compress_dynamic(&mut bitwriter, &data),
         Fixed => compress_fixed(&mut bitwriter, &data),
         Raw => compress_raw(&mut bitwriter, &data),
         Auto => {}
     };
+
+    // Checksum
+    bitwriter.write_bytes(&[0].repeat(4));
 
     bitwriter.finish()
 }
@@ -54,10 +69,14 @@ fn compress_fixed(_writer: &mut BitWriter, _data: &[u8]) {
     todo!()
 }
 
-fn compress_dynamic(
-    _writer: &mut BitWriter,
-    _data: &[u8],
-    _compressor: &LZ77Compressor,
-) {
+fn compress_dynamic(_writer: &mut BitWriter, _data: &[u8]) {
     todo!()
+}
+
+fn get_zlib_compressor() -> LZ77Compressor {
+    let mut compressor = LZ77Compressor::with_window_size(ZLIB_WINDOW_SIZE);
+    compressor.min_string_length = ZLIB_MIN_STRING_LENGTH;
+    compressor.max_string_length = ZLIB_MAX_STRING_LENGTH;
+    compressor.max_string_distance = ZLIB_WINDOW_SIZE;
+    compressor
 }
