@@ -164,7 +164,6 @@ impl BitWriter {
     pub fn flush_byte(&mut self) {
         assert!(self.numbits <= 8, "Invalid state");
         if self.numbits > 0 {
-            self.byte <<= 8 - self.numbits;
             self.buffer.push(self.byte);
             self.byte = 0;
             self.numbits = 0;
