@@ -333,6 +333,35 @@ impl LZ77Compressor {
     pub fn decode_reference_length(&self, data: &[u8]) -> usize {
         self.decode_reference_int(data, 1) + self.min_string_length
     }
+
+    pub fn is_reference_byte(
+        &self,
+        data: &[u8],
+        idx: usize,
+    ) -> (bool, usize, Option<(usize, usize)>) {
+        // Handle reference bytes
+        if data[idx] == self.reference_prefix_code {
+            match data.get(idx + 1) {
+                Some(&x) if x == self.reference_prefix_code => {
+                    // If next byte is also reference code,
+                    // this was an "escape" sequence for the literal
+                    // prefix_code represents
+                    (false, idx + 2, None)
+                }
+                _ => {
+                    // This is the case where we need to decode
+                    // reference int
+                    let distance = self
+                        .decode_reference_int(&data[(idx + 1)..(idx + 3)], 2);
+                    let length = self
+                        .decode_reference_length(&data[(idx + 3)..(idx + 4)]);
+                    (true, idx + 1, Some((distance, length)))
+                }
+            }
+        } else {
+            (false, idx + 1, None)
+        }
+    }
 }
 
 #[cfg(test)]
