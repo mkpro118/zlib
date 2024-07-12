@@ -299,6 +299,22 @@ impl HuffmanTree {
             })
     }
 
+    pub fn get_zlib_fixed() -> (Self, Self) {
+        let mut bitlen = vec![8; 144];
+        bitlen.extend_from_slice(&[9].repeat(256 - 144));
+        bitlen.extend_from_slice(&[7].repeat(280 - 256));
+        bitlen.extend_from_slice(&[8].repeat(288 - 280));
+        let literal_tree = HuffmanTree::from_bitlen_list(
+            &bitlen,
+            &literal_length_tree_alphabet(),
+        );
+
+        let bitlen = [5; 30];
+        let distance_tree =
+            HuffmanTree::from_bitlen_list(&bitlen, &distance_tree_alphabet());
+        (literal_tree, distance_tree)
+    }
+
     /// Inserts a new symbol into the Huffman tree.
     ///
     /// # Arguments

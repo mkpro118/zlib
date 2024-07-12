@@ -3,8 +3,8 @@
 
 use crate::zlib::bitreader::BitReader;
 use crate::zlib::huffman::{
-    distance_tree_alphabet, literal_length_tree_alphabet, HuffmanTree,
-    DISTANCE_BASE, DISTANCE_EXTRA_BITS, LENGTH_BASE, LENGTH_EXTRA_BITS,
+    HuffmanTree, DISTANCE_BASE, DISTANCE_EXTRA_BITS, LENGTH_BASE,
+    LENGTH_EXTRA_BITS,
 };
 
 /// Decompresses DEFLATE-compressed data.
@@ -124,17 +124,7 @@ fn inflate_block_no_compression(reader: &mut BitReader, buffer: &mut Vec<u8>) {
 ///
 /// This function is called by `inflate` when a block with fixed Huffman codes is encountered.
 fn inflate_block_fixed(reader: &mut BitReader, buffer: &mut Vec<u8>) {
-    let mut bitlen = vec![8; 144];
-    bitlen.extend_from_slice(&[9].repeat(256 - 144));
-    bitlen.extend_from_slice(&[7].repeat(280 - 256));
-    bitlen.extend_from_slice(&[8].repeat(288 - 280));
-    let literal_tree =
-        HuffmanTree::from_bitlen_list(&bitlen, &literal_length_tree_alphabet());
-
-    let bitlen = [5; 30];
-    let distance_tree =
-        HuffmanTree::from_bitlen_list(&bitlen, &distance_tree_alphabet());
-
+    let (literal_tree, distance_tree) = HuffmanTree::get_zlib_fixed();
     inflate_block_data(reader, &literal_tree, &distance_tree, buffer);
 }
 
