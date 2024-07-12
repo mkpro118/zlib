@@ -51,18 +51,24 @@ pub fn compress(data: &[u8], strategy: &Strategy) -> Vec<u8> {
 
 #[allow(clippy::cast_possible_truncation)]
 fn compress_raw(writer: &mut BitWriter, data: &[u8]) {
-    // Write length of block
-    let len = data.len() as u16;
-    let bytes = [(len >> 8) as u8, (len & 0x0f) as u8];
-    writer.write_bytes(&bytes);
+    let n_blocks = data.len().div_ceil(SIXTEEN_KB) - 1;
 
-    // Write one's complement of the length of block
-    let len = !len;
-    let bytes = [(len >> 8) as u8, (len & 0x0f) as u8];
-    writer.write_bytes(&bytes);
+    for (curr_block, chunk) in data.chunks(SIXTEEN_KB).enumerate() {
+        writer.write_bit(if curr_block == n_blocks { 1 } else { 0 });
+        writer.write_bits(0b00, 2);
+        // Write length of block
+        let len = data.len() as u16;
+        let bytes = [(len & 0xff) as u8, (len >> 8) as u8];
+        writer.write_bytes(&bytes);
 
-    // Write the raw block out
-    writer.write_bytes(data);
+        // Write one's complement of the length of block
+        let len = !len;
+        let bytes = [(len & 0xff) as u8, (len >> 8) as u8];
+        writer.write_bytes(&bytes);
+
+        // Write the raw block out
+        writer.write_bytes(chunk);
+    }
 }
 
 fn compress_fixed(_writer: &mut BitWriter, _data: &[u8]) {
