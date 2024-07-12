@@ -5,4 +5,5 @@ pub mod decompress;
 pub mod huffman;
 pub mod lz77;
 
+pub use compress::*;
 pub use decompress::*;
