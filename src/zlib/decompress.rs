@@ -1,6 +1,7 @@
 //! This module provides functionality for decompressing DEFLATE-compressed data.
 //! Inspired from: [this article](https://pyokagan.name/blog/2019-10-18-zlibinflate/)
 
+use crate::zlib::adler::adler32;
 use crate::zlib::bitreader::BitReader;
 use crate::zlib::huffman::{
     HuffmanTree, DISTANCE_BASE, DISTANCE_EXTRA_BITS, LENGTH_BASE,
@@ -70,10 +71,20 @@ pub fn decompress(input: &[u8]) -> Result<Vec<u8>, String> {
     // Inflate the data
     let inflated = inflate(&mut reader)?;
 
-    // We ignore the checksum
-    let _adler32 = reader.read_bytes(4);
+    // Need to interpret the value as Big-Endian, because zlib uses Big-Endian.
+    let adler32 = adler32(&inflated);
 
-    Ok(inflated)
+    // Assert that the checksum is correct
+    let checksum_bytes = (0..4).fold([0u8; 4], |mut acc, idx| {
+        acc[idx] = reader.read_byte();
+        acc
+    });
+    let checksum = u32::from_be_bytes(checksum_bytes);
+    if adler32 != checksum {
+        Err("Checksum is invalid".to_owned())
+    } else {
+        Ok(inflated)
+    }
 }
 
 /// Inflates DEFLATE-compressed data.

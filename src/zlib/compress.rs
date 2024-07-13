@@ -1,6 +1,6 @@
 #![allow(clippy::missing_errors_doc, clippy::missing_panics_doc)]
 
-use crate::zlib::adler::Adler;
+use crate::zlib::adler::adler32;
 use crate::zlib::huffman::{
     HuffmanTree, ZLIB_MAX_STRING_LENGTH, ZLIB_MIN_STRING_LENGTH,
     ZLIB_WINDOW_SIZE,
@@ -52,9 +52,8 @@ pub fn compress(data: &[u8], strategy: &Strategy) -> Vec<u8> {
     };
 
     // Checksum
-    let checksum = Adler::from(data);
-    bitwriter.write_bits(checksum.b as usize, 16);
-    bitwriter.write_bits(checksum.a as usize, 16);
+    let checksum = adler32(data).to_be_bytes();
+    bitwriter.write_bytes(&checksum);
 
     bitwriter.finish()
 }
