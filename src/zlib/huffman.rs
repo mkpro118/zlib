@@ -21,7 +21,7 @@ use std::collections::{BinaryHeap, HashMap, VecDeque};
 use crate::zlib::bitreader::BitReader;
 // use crate::zlib::bitwriter::BitWriter;
 
-use crate::zlib::lz77::LZ77Compressor;
+use crate::zlib::lz77::{LZ77Compressor, LZ77Unit};
 
 /// The order of code length codes used in Huffman tree construction.
 static CODE_LENGTH_CODES_ORDER: [usize; 19] = [
@@ -177,7 +177,9 @@ impl HuffmanTree {
 
     #[must_use]
     #[allow(clippy::missing_panics_doc, clippy::cast_possible_truncation)]
-    pub fn from_lz77(data: &[u8], lz77: &LZ77Compressor) -> (Self, Self) {
+    pub fn from_lz77(data: &[LZ77Unit], lz77: &LZ77Compressor) -> (Self, Self) {
+        use LZ77Unit::{Literal, Marker};
+
         check_lz77(lz77);
 
         let mut sym_freq = [0usize; 286];
@@ -186,25 +188,19 @@ impl HuffmanTree {
         let mut count_sym = |byte: usize| sym_freq[byte] += 1;
         let mut count_dist = |byte| dist_freq[byte] += 1;
 
-        let mut idx = 0;
+        for unit in data {
+            match unit {
+                Literal(byte) => count_sym(*byte as usize),
+                Marker(length, distance) => {
+                    assert!(*length >= 3, "Length too short!");
+                    let length = length - 3;
+                    let length_code = get_length_code(length);
+                    let distance_code = get_distance_code(*distance);
 
-        while idx < data.len() {
-            let byte = data[idx];
-            let (is_reference, _idx, reference_data) =
-                lz77.is_reference_byte(data, idx);
-            if is_reference {
-                let Some((distance, length)) = reference_data else {
-                    panic!("Invalid return value from is_reference_byte!!");
-                };
-                let length_code = get_length_code(length);
-                let distance_code = get_distance_code(distance);
-
-                count_sym(length_code);
-                count_dist(distance_code);
-            } else {
-                count_sym(byte as usize);
+                    count_sym(length_code);
+                    count_dist(distance_code);
+                }
             }
-            idx = _idx;
         }
 
         // convert arrays to hashmaps
@@ -591,15 +587,15 @@ fn check_lz77(lz77: &LZ77Compressor) {
     );
 
     assert_eq!(
-        lz77.min_string_length, ZLIB_MIN_STRING_LENGTH,
+        lz77.min_match_length, ZLIB_MIN_STRING_LENGTH,
         "Incompatible LZ77 min string length, required {}, found {}",
-        ZLIB_MIN_STRING_LENGTH, lz77.min_string_length
+        ZLIB_MIN_STRING_LENGTH, lz77.min_match_length
     );
 
     assert_eq!(
-        lz77.max_string_length, ZLIB_MAX_STRING_LENGTH,
+        lz77.max_match_length, ZLIB_MAX_STRING_LENGTH,
         "Incompatible LZ77 max string length, required {}, found {}",
-        ZLIB_MAX_STRING_LENGTH, lz77.max_string_length
+        ZLIB_MAX_STRING_LENGTH, lz77.max_match_length
     );
 }
 
