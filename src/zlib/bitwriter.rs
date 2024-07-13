@@ -15,7 +15,7 @@
 /// writer.write_bits(0b01, 2);
 ///
 /// let result = writer.finish();
-/// assert_eq!(result, vec![0b0111_1000]);
+/// assert_eq!(result, vec![0b0001_1110]);
 /// ```
 #[derive(Debug)]
 pub struct BitWriter {
@@ -63,7 +63,7 @@ impl BitWriter {
     /// writer.write_bit(1);
     ///
     /// let result = writer.finish();
-    /// assert_eq!(result, vec![0b10100000]);
+    /// assert_eq!(result, vec![0b0000_0101]);
     /// ```
     pub fn write_bit(&mut self, bit: u8) {
         if self.numbits == 8 {
@@ -159,7 +159,7 @@ impl BitWriter {
     /// writer.flush_byte();
     ///
     /// let result = writer.finish();
-    /// assert_eq!(result, vec![0b10100000]);
+    /// assert_eq!(result, vec![0b0000_0101]);
     /// ```
     pub fn flush_byte(&mut self) {
         assert!(self.numbits <= 8, "Invalid state");
@@ -182,7 +182,7 @@ impl BitWriter {
     /// writer.write_byte(0xA5);
     ///
     /// let result = writer.finish();
-    /// assert_eq!(result, vec![0b11010000, 0xA5]);
+    /// assert_eq!(result, vec![0b0000_1101, 0xA5]);
     /// ```
     #[must_use]
     pub fn finish(mut self) -> Vec<u8> {
@@ -209,7 +209,7 @@ mod tests {
     fn test_write_bits() {
         let mut writer = BitWriter::new();
         writer.write_bits(0b1_0010_1011, 9);
-        assert_eq!(writer.finish(), vec![0x2b, 0x80]);
+        assert_eq!(writer.finish(), vec![0x2b, 0x01]);
     }
 
     #[test]
@@ -234,7 +234,7 @@ mod tests {
         writer.write_byte(0xF0);
         writer.write_bit(1);
         writer.write_bits(0b101, 3);
-        assert_eq!(writer.finish(), vec![0xA0, 0xF0, 0xB0]);
+        assert_eq!(writer.finish(), vec![0x0A, 0xF0, 0x0B]);
     }
 
     #[test]
@@ -243,6 +243,6 @@ mod tests {
         writer.write_bits(0b101, 3);
         writer.write_byte(0xF0);
         writer.write_byte(0xAA);
-        assert_eq!(writer.finish(), vec![0xA0, 0xF0, 0xAA]);
+        assert_eq!(writer.finish(), vec![0x05, 0xF0, 0xAA]);
     }
 }
