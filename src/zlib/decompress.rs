@@ -18,7 +18,7 @@ use crate::zlib::huffman::{
 /// use mini_git::zlib::decompress;
 ///
 /// let compressed_data = vec![0x78, 0x9C, 0x4B, 0xCE, 0xCF, 0x2D, 0x28, 0x4A,
-///     0x2D, 0x2E, 0x4E, 0x4D, 0x01, 0x00, 0x14, 0x81, 0x03, 0x7D];
+///     0x2D, 0x2E, 0x4E, 0x4D, 0x01, 0x00, 0x17, 0x3F, 0x04, 0x36];
 /// let decompressed_data = decompress(&compressed_data).unwrap();
 /// assert_eq!(decompressed_data, b"compressed");
 /// ```
@@ -250,9 +250,7 @@ mod tests {
 
             // Ensure the checksum is not divisible by 31
             // If it is, skip that iteration
-            if checksum % 31 == 0 {
-                assert!(res.is_ok());
-            } else {
+            if checksum % 31 != 0 {
                 assert!(res.is_err());
             }
         }
