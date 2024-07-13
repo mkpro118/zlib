@@ -26,7 +26,7 @@ pub fn compress(data: &[u8], strategy: &Strategy) -> Vec<u8> {
     const COMPRESSION_INFO: u8 = 0b0111_0000;
     const FDICT_MASK: u8 = 0b00_1_00000;
     const FLEVEL_MASK: u8 = 0b11_000000;
-    const NO_FDICT_AND_FLEVEL: u8 = !(FDICT_MASK | FLEVEL_MASK);
+    const NO_FDICT_OR_FLEVEL: u8 = !(FDICT_MASK | FLEVEL_MASK);
 
     let mut bitwriter = BitWriter::new();
 
@@ -40,7 +40,7 @@ pub fn compress(data: &[u8], strategy: &Strategy) -> Vec<u8> {
     );
 
     // Clear the FDICT and FLEVEL bits;
-    let flg = (fcheck as u8) & NO_FDICT_AND_FLEVEL;
+    let flg = (fcheck as u8) & NO_FDICT_OR_FLEVEL;
     bitwriter.write_byte(flg);
 
     match strategy {
