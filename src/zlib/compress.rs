@@ -1,14 +1,13 @@
 #![allow(clippy::missing_errors_doc, clippy::missing_panics_doc)]
 
 use crate::zlib::adler::adler32;
+use crate::zlib::bitwriter::BitWriter;
 use crate::zlib::huffman::{
-    HuffmanTree, ZLIB_MAX_STRING_LENGTH, ZLIB_MIN_STRING_LENGTH,
-    ZLIB_WINDOW_SIZE,
+    get_distance_code, get_length_code, HuffmanTree, ZLIB_MAX_STRING_LENGTH,
+    ZLIB_MIN_STRING_LENGTH, ZLIB_WINDOW_SIZE,
 };
 use crate::zlib::lz77::{LZ77Compressor, LZ77Unit};
 use LZ77Unit::{Literal, Marker};
-
-use super::bitwriter::BitWriter;
 
 const SIXTEEN_KB: usize = 16 * 1024;
 
@@ -80,38 +79,68 @@ fn compress_raw(writer: &mut BitWriter, data: &[u8]) {
     }
 }
 
-fn compress_fixed(_writer: &mut BitWriter, data: &[u8]) {
+fn compress_fixed(writer: &mut BitWriter, data: &[u8]) {
     let compressor = get_zlib_compressor();
-    let (mut ltree, mut dtree) = HuffmanTree::get_zlib_fixed();
-    ltree.assign();
-    dtree.assign();
+    let (mut length_tree, mut distance_tree) = HuffmanTree::get_zlib_fixed();
+    length_tree.assign();
+    distance_tree.assign();
 
-    let literal_writer = |_byte: u8| {
-        todo!();
-    };
-
-    let length_writer = |_length: usize| {
-        todo!();
-    };
-
-    let distance_writer = |_distance: usize| {
-        todo!();
-    };
-
-    let data = compressor.compress(data);
-    for unit in data {
+    for unit in compressor.compress(data) {
         match unit {
-            Literal(byte) => literal_writer(byte),
+            Literal(byte) => {
+                literal_writer(&length_tree, writer, char::from(byte))
+            }
             Marker(length, distance) => {
-                length_writer(length);
-                distance_writer(distance);
+                length_writer(&length_tree, writer, length);
+                distance_writer(&distance_tree, writer, distance);
             }
         }
     }
+
+    literal_writer(&length_tree, writer, '\u{100}');
 }
 
 fn compress_dynamic(_writer: &mut BitWriter, _data: &[u8]) {
     todo!()
+    // literal_writer(&ltree, writer, 256 as char);
+}
+
+fn literal_writer(ltree: &HuffmanTree, writer: &mut BitWriter, byte: char) {
+    let byte = byte as char;
+    let Some((code, len)) = ltree.encode(byte) else {
+        panic!("No encoding found for '{}'", byte);
+    };
+    writer.write_bits(code, len);
+}
+
+fn length_writer(ltree: &HuffmanTree, writer: &mut BitWriter, length: usize) {
+    assert!(length > 3, "Length too short!");
+    assert!(length <= 258, "Length too long!");
+
+    let length = get_length_code(length) as u32;
+    let length =
+        char::from_u32(length).expect("Should convert, already checked");
+    let Some((code, len)) = ltree.encode(length) else {
+        panic!("No encoding found for '{}'", length);
+    };
+    writer.write_bits(code, len);
+}
+
+fn distance_writer(
+    dtree: &HuffmanTree,
+    writer: &mut BitWriter,
+    distance: usize,
+) {
+    assert!(distance > 1, "Distance too short!");
+    assert!(distance < 32768, "Distance too long!");
+
+    let distance = get_distance_code(distance) as u32;
+    let distance =
+        char::from_u32(distance).expect("Should convert, already checked");
+    let Some((code, len)) = dtree.encode(distance) else {
+        panic!("No encoding found for '{}'", distance);
+    };
+    writer.write_bits(code, len);
 }
 
 #[allow(dead_code)]
