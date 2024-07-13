@@ -15,42 +15,26 @@
 //! assert!(compressed.len() < data.len());
 //! ```
 
-#![allow(dead_code)]
-
-use std::collections::VecDeque;
-
-const REFERENCE_PREFIX: char = '`';
-const REFERENCE_PREFIX_CODE: u8 = REFERENCE_PREFIX as u8;
-const REFERENCE_INT_BASE: u8 = 96;
-const REFERENCE_INT_FLOOR_CODE: u8 = b' ';
-const REFERENCE_INT_CEIL_CODE: u8 = 127;
-const DEFAULT_MAX_STRING_DISTANCE: usize = 9215; // 32KB
 const DEFAULT_MIN_STRING_LENGTH: usize = 5;
 const DEFAULT_MAX_STRING_LENGTH: usize = 100;
 const MAX_WINDOW_SIZE: usize = 1 << 15; // 32KB
 const DEFAULT_WINDOW_SIZE: usize = 144;
+
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
+pub enum LZ77Unit {
+    Literal(u8),
+    Marker(usize, usize),
+}
 
 /// Represents an LZ77 compressor with configurable parameters.
 #[derive(Debug)]
 pub struct LZ77Compressor {
     /// The size of the sliding window used for finding matches.
     pub window_size: usize,
-    /// The character used to indicate a reference in the compressed output.
-    pub reference_prefix: char,
-    /// The byte code for the reference prefix.
-    pub reference_prefix_code: u8,
-    /// The base used for encoding reference integers.
-    pub reference_int_base: u8,
-    /// The floor code for reference integers.
-    pub reference_int_floor_code: u8,
-    /// The ceiling code for reference integers.
-    pub reference_int_ceil_code: u8,
-    /// The maximum distance allowed for string references.
-    pub max_string_distance: usize,
     /// The minimum length required for string references.
-    pub min_string_length: usize,
+    pub min_match_length: usize,
     /// The maximum length allowed for string references.
-    pub max_string_length: usize,
+    pub max_match_length: usize,
 }
 
 impl Default for LZ77Compressor {
@@ -67,14 +51,8 @@ impl Default for LZ77Compressor {
     fn default() -> Self {
         Self {
             window_size: DEFAULT_WINDOW_SIZE,
-            reference_prefix: REFERENCE_PREFIX,
-            reference_prefix_code: REFERENCE_PREFIX_CODE,
-            reference_int_base: REFERENCE_INT_BASE,
-            reference_int_floor_code: REFERENCE_INT_FLOOR_CODE,
-            reference_int_ceil_code: REFERENCE_INT_CEIL_CODE,
-            max_string_distance: DEFAULT_MAX_STRING_DISTANCE,
-            min_string_length: DEFAULT_MIN_STRING_LENGTH,
-            max_string_length: DEFAULT_MAX_STRING_LENGTH,
+            min_match_length: DEFAULT_MIN_STRING_LENGTH,
+            max_match_length: DEFAULT_MAX_STRING_LENGTH,
         }
     }
 }
@@ -162,16 +140,17 @@ impl LZ77Compressor {
     /// assert!(compressed.len() < data.len());
     /// ```
     #[must_use]
-    pub fn compress(&self, data: &[u8]) -> Vec<u8> {
-        let mut compressed: Vec<u8> = vec![];
+    pub fn compress(&self, data: &[u8]) -> Vec<LZ77Unit> {
+        use LZ77Unit::{Literal, Marker};
+
+        let mut compressed: Vec<LZ77Unit> = vec![];
         let window_size = self.window_size;
 
         let mut pos = 0;
-        let last_pos = if data.len() > self.min_string_length {
-            data.len() - self.min_string_length
+        let last_pos = if data.len() > self.min_match_length {
+            data.len() - self.min_match_length
         } else {
-            compressed.extend_from_slice(data);
-            return compressed;
+            return data.iter().map(|&byte| Literal(byte)).collect();
         };
 
         while pos < last_pos {
@@ -181,12 +160,11 @@ impl LZ77Compressor {
                 0
             };
 
-            let mut match_length = self.min_string_length;
+            let mut match_length = self.min_match_length;
 
             let mut found_match = false;
-            let mut best_match_distance = self.max_string_distance;
+            let mut best_match_distance = 0;
             let mut best_match_length = 0;
-            let new_compressed: Option<Vec<u8>>;
 
             while search_start + match_length < pos {
                 let end = data.len().min(search_start + match_length);
@@ -194,7 +172,7 @@ impl LZ77Compressor {
                 let end = data.len().min(pos + match_length);
                 let m2 = &data[pos..end];
 
-                if m1 == m2 && match_length < self.max_string_length {
+                if m1 == m2 && match_length < self.max_match_length {
                     match_length += 1;
                     found_match = true;
                 } else {
@@ -206,161 +184,27 @@ impl LZ77Compressor {
                         best_match_length = true_match_length;
                     }
 
-                    match_length = self.min_string_length;
+                    match_length = self.min_match_length;
                     search_start += 1;
                     found_match = false;
                 }
             }
 
             pos += if best_match_length > 0 {
-                let mut new_data = vec![self.reference_prefix_code];
-                new_data.extend_from_slice(
-                    &self.encode_reference_int(best_match_distance, 2),
-                );
-                new_data.extend_from_slice(
-                    &self.encode_reference_length(best_match_length),
-                );
-
-                new_compressed = Some(new_data);
+                compressed.push(Marker(best_match_length, best_match_distance));
                 best_match_length
             } else {
-                let new_data = if data[pos] == self.reference_prefix_code {
-                    vec![self.reference_prefix_code, self.reference_prefix_code]
-                } else {
-                    vec![data[pos]]
-                };
-
-                new_compressed = Some(new_data);
-
+                compressed.push(Literal(data[pos]));
                 1
             };
-
-            if let Some(chunk) = new_compressed {
-                compressed.extend_from_slice(&chunk);
-            }
         }
 
         compressed.extend(data[pos..].iter().fold(vec![], |mut acc, &x| {
-            if x == self.reference_prefix_code {
-                acc.push(x);
-            }
-            acc.push(x);
+            acc.push(Literal(x));
             acc
         }));
 
         compressed
-    }
-
-    /// Encodes a reference integer used in LZ77 compression.
-    ///
-    /// # Arguments
-    ///
-    /// * `value` - The integer value to encode.
-    /// * `width` - The number of bytes to use for encoding.
-    ///
-    /// # Returns
-    ///
-    /// Returns a `Vec<u8>` containing the encoded integer.
-    ///
-    /// # Panics
-    ///
-    /// Panics if the value is out of range for the given width.
-    #[allow(clippy::cast_possible_truncation)]
-    #[must_use]
-    pub fn encode_reference_int(
-        &self,
-        mut value: usize,
-        width: usize,
-    ) -> Vec<u8> {
-        let ref_int_base = self.reference_int_base as usize;
-
-        assert!(
-            value < ref_int_base.pow(width as u32) - 1,
-            "{}",
-            format!("Reference value out of range: {value} (width = {width})")
-        );
-
-        let mut encoded: VecDeque<u8> = VecDeque::new();
-
-        while value > 0 {
-            let byte = (value % ref_int_base) as u8;
-            let byte = byte + self.reference_int_floor_code;
-            encoded.push_front(byte);
-
-            value /= ref_int_base;
-        }
-
-        let missing_len = if width > encoded.len() {
-            width - encoded.len()
-        } else {
-            0
-        };
-
-        let encoded = (0..missing_len).fold(encoded, |mut acc, _| {
-            acc.push_front(self.reference_int_floor_code);
-            acc
-        });
-
-        Vec::from(encoded)
-    }
-
-    /// Shortcut function for encoding reference lengths
-    #[must_use]
-    pub fn encode_reference_length(&self, length: usize) -> Vec<u8> {
-        self.encode_reference_int(length - self.min_string_length, 1)
-    }
-
-    #[allow(clippy::cast_possible_truncation, clippy::missing_panics_doc)]
-    #[must_use]
-    pub fn decode_reference_int(&self, data: &[u8], width: usize) -> usize {
-        assert!(data.len() >= width, "Not enough data to read {width} bits");
-        let mut value = 0usize;
-
-        for &code in data.iter().take(width) {
-            value *= self.reference_int_base as usize;
-            assert!(
-                code >= self.reference_int_floor_code
-                    && code <= self.reference_int_ceil_code,
-                "Invalid char code: {code}"
-            );
-            value += (code - self.reference_int_floor_code) as usize;
-        }
-
-        value
-    }
-
-    #[must_use]
-    pub fn decode_reference_length(&self, data: &[u8]) -> usize {
-        self.decode_reference_int(data, 1) + self.min_string_length
-    }
-
-    pub fn is_reference_byte(
-        &self,
-        data: &[u8],
-        idx: usize,
-    ) -> (bool, usize, Option<(usize, usize)>) {
-        // Handle reference bytes
-        if data[idx] == self.reference_prefix_code {
-            match data.get(idx + 1) {
-                Some(&x) if x == self.reference_prefix_code => {
-                    // If next byte is also reference code,
-                    // this was an "escape" sequence for the literal
-                    // prefix_code represents
-                    (false, idx + 2, None)
-                }
-                _ => {
-                    // This is the case where we need to decode
-                    // reference int
-                    let distance = self
-                        .decode_reference_int(&data[(idx + 1)..(idx + 3)], 2);
-                    let length = self
-                        .decode_reference_length(&data[(idx + 3)..(idx + 4)]);
-                    (true, idx + 1, Some((distance, length)))
-                }
-            }
-        } else {
-            (false, idx + 1, None)
-        }
     }
 }
 
@@ -371,26 +215,15 @@ mod tests {
     #[test]
     fn test_compress_should_reduce_size() {
         let data = [
-            (
-                "ABCBDBDBDBDBDBDBCBADBSB".as_bytes(),
-                "ABCBDBDBDBD` # CBADBSB".as_bytes(),
-            ),
-            (
-                "hi hi hello hi hi wow hello hi".as_bytes(),
-                "hi hi hello` $ i wow` '$".as_bytes(),
-            ),
-            (
-                "abcdefabcdefabcdef".as_bytes(),
-                "abcdefabcdef` &!".as_bytes(),
-            ),
+            "ABCBDBDBDBDBDBDBCBADBSB".as_bytes(),
+            "hi hi hello hi hi wow hello hi".as_bytes(),
+            "abcdefabcdefabcdef".as_bytes(),
         ];
 
         let compressor = LZ77Compressor::default();
-        for (raw_data, known_compressed) in data {
+        for raw_data in data {
             let compressed = compressor.compress(&raw_data);
             assert!(raw_data.len() > compressed.len());
-            assert_eq!(known_compressed.len(), compressed.len());
-            assert_eq!(known_compressed, compressed);
         }
     }
 
@@ -406,7 +239,13 @@ mod tests {
         for raw_data in data {
             let compressed = compressor.compress(&raw_data);
             assert_eq!(raw_data.len(), compressed.len());
-            assert_eq!(raw_data, compressed);
+            raw_data
+                .iter()
+                .zip(compressed.iter())
+                .for_each(|(r, c)| match c {
+                    LZ77Unit::Literal(b) => assert_eq!(r, b),
+                    _ => panic!("Encounter non-literal data"),
+                })
         }
     }
 
@@ -414,17 +253,8 @@ mod tests {
     fn test_default() {
         let compressor = LZ77Compressor::default();
         assert_eq!(compressor.window_size, DEFAULT_WINDOW_SIZE);
-        assert_eq!(compressor.reference_prefix, REFERENCE_PREFIX);
-        assert_eq!(compressor.reference_prefix_code, REFERENCE_PREFIX_CODE);
-        assert_eq!(compressor.reference_int_base, REFERENCE_INT_BASE);
-        assert_eq!(
-            compressor.reference_int_floor_code,
-            REFERENCE_INT_FLOOR_CODE
-        );
-        assert_eq!(compressor.reference_int_ceil_code, REFERENCE_INT_CEIL_CODE);
-        assert_eq!(compressor.max_string_distance, DEFAULT_MAX_STRING_DISTANCE);
-        assert_eq!(compressor.min_string_length, DEFAULT_MIN_STRING_LENGTH);
-        assert_eq!(compressor.max_string_length, DEFAULT_MAX_STRING_LENGTH);
+        assert_eq!(compressor.min_match_length, DEFAULT_MIN_STRING_LENGTH);
+        assert_eq!(compressor.max_match_length, DEFAULT_MAX_STRING_LENGTH);
     }
 
     #[test]
@@ -464,7 +294,7 @@ mod tests {
         let compressor = LZ77Compressor::default();
         let input = vec![];
         let compressed = compressor.compress(&input);
-        assert_eq!(compressed, input);
+        assert_eq!(compressed.len(), 0);
     }
 
     #[test]
@@ -483,64 +313,6 @@ mod tests {
         let compressed = compressor.compress(&input);
         assert!(!compressed.is_empty());
         assert!(compressed.len() < input.len());
-    }
-
-    #[test]
-    fn test_encode_reference_int() {
-        let compressor = LZ77Compressor::default();
-
-        // Test small values
-        assert_eq!(compressor.encode_reference_int(0, 1), vec![b' ']);
-        assert_eq!(compressor.encode_reference_int(1, 1), vec![b'!']);
-
-        // Test larger values
-        assert_eq!(compressor.encode_reference_int(31, 1), vec![b'?']);
-        // assert_eq!(compressor.encode_reference_int(32, 2), vec![b' ', b'!']);
-
-        // Test maximum value for width
-        assert_eq!(compressor.encode_reference_int(94, 1), vec![b'~']);
-    }
-
-    #[test]
-    #[should_panic(expected = "Reference value out of range")]
-    fn test_encode_reference_int_out_of_range() {
-        let compressor = LZ77Compressor::default();
-        let _ = compressor.encode_reference_int(95, 1);
-    }
-
-    #[test]
-    fn test_encode_reference_length() {
-        let compressor = LZ77Compressor::default();
-
-        // Test minimum length
-        assert_eq!(
-            compressor.encode_reference_length(DEFAULT_MIN_STRING_LENGTH),
-            vec![b' ']
-        );
-
-        // Test some regular lengths
-        assert_eq!(
-            compressor.encode_reference_length(DEFAULT_MIN_STRING_LENGTH + 1),
-            vec![b'!']
-        );
-        assert_eq!(
-            compressor.encode_reference_length(DEFAULT_MIN_STRING_LENGTH + 31),
-            vec![b'?']
-        );
-
-        // Test maximum length
-        assert_eq!(
-            compressor.encode_reference_length(DEFAULT_MIN_STRING_LENGTH + 90),
-            vec![b'z']
-        );
-    }
-
-    #[test]
-    #[should_panic(expected = "Reference value out of range")]
-    fn test_encode_reference_length_too_large() {
-        let compressor = LZ77Compressor::default();
-        let _ =
-            compressor.encode_reference_length(DEFAULT_MIN_STRING_LENGTH + 96);
     }
 
     #[test]
