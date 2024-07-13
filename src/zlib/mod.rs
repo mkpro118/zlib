@@ -1,3 +1,4 @@
+pub mod adler;
 pub mod bitreader;
 pub mod bitwriter;
 pub mod compress;
