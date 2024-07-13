@@ -1,4 +1,9 @@
-use crate::zlib::huffman::*;
+#![allow(clippy::missing_errors_doc, clippy::missing_panics_doc)]
+
+use crate::zlib::huffman::{
+    HuffmanTree, ZLIB_MAX_STRING_LENGTH, ZLIB_MIN_STRING_LENGTH,
+    ZLIB_WINDOW_SIZE,
+};
 use crate::zlib::lz77::{LZ77Compressor, LZ77Unit};
 use LZ77Unit::{Literal, Marker};
 
@@ -13,14 +18,18 @@ pub enum Strategy {
     Raw,
 }
 
+#[allow(clippy::unusual_byte_groupings, clippy::cast_possible_truncation)]
 #[must_use]
 pub fn compress(data: &[u8], strategy: &Strategy) -> Vec<u8> {
     use Strategy::{Auto, Dynamic, Fixed, Raw};
+    const COMPRESSION_METHOD: u8 = 0b0000_1000;
+    const COMPRESSION_INFO: u8 = 0b0111_0000;
+    const FDICT_MASK: u8 = 0b00_1_00000;
+    const FLEVEL_MASK: u8 = 0b11_000000;
+    const NO_FDICT_AND_FLEVEL: u8 = !(FDICT_MASK | FLEVEL_MASK);
 
     let mut bitwriter = BitWriter::new();
 
-    const COMPRESSION_METHOD: u8 = 0b0000_1000;
-    const COMPRESSION_INFO: u8 = 0b0111_0000;
     let cmf = COMPRESSION_INFO | COMPRESSION_METHOD;
     bitwriter.write_byte(cmf);
 
@@ -31,9 +40,6 @@ pub fn compress(data: &[u8], strategy: &Strategy) -> Vec<u8> {
     );
 
     // Clear the FDICT and FLEVEL bits;
-    const FDICT_MASK: u8 = 0b00_1_00000;
-    const FLEVEL_MASK: u8 = 0b11_000000;
-    const NO_FDICT_AND_FLEVEL: u8 = !(FDICT_MASK | FLEVEL_MASK);
     let flg = (fcheck as u8) & NO_FDICT_AND_FLEVEL;
     bitwriter.write_byte(flg);
 
@@ -55,7 +61,7 @@ fn compress_raw(writer: &mut BitWriter, data: &[u8]) {
     let n_blocks = data.len().div_ceil(SIXTEEN_KB) - 1;
 
     for (curr_block, chunk) in data.chunks(SIXTEEN_KB).enumerate() {
-        writer.write_bit(if curr_block == n_blocks { 1 } else { 0 });
+        writer.write_bit(u8::from(curr_block == n_blocks));
         writer.write_bits(0b00, 2);
         // Write length of block
         let len = data.len() as u16;

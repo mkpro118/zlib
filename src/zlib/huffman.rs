@@ -276,6 +276,7 @@ impl HuffmanTree {
             })
     }
 
+    #[must_use]
     pub fn get_zlib_fixed() -> (Self, Self) {
         let mut bitlen = vec![8; 144];
         bitlen.extend_from_slice(&[9].repeat(256 - 144));
@@ -500,6 +501,7 @@ impl HuffmanTree {
         (lit_tree, dist_tree)
     }
 
+    #[allow(clippy::missing_panics_doc)]
     pub fn assign(&mut self) {
         if self.map.is_none() {
             self.map = Some(HashMap::new());
@@ -526,6 +528,7 @@ impl HuffmanTree {
         }
     }
 
+    #[must_use]
     pub fn encode(&self, symbol: char) -> Option<(usize, usize)> {
         self.map.as_ref()?.get(&symbol).copied()
     }
