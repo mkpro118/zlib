@@ -1,5 +1,6 @@
 use crate::zlib::huffman::*;
-use crate::zlib::lz77::LZ77Compressor;
+use crate::zlib::lz77::{LZ77Compressor, LZ77Unit};
+use LZ77Unit::{Literal, Marker};
 
 use super::bitwriter::BitWriter;
 
@@ -71,8 +72,34 @@ fn compress_raw(writer: &mut BitWriter, data: &[u8]) {
     }
 }
 
-fn compress_fixed(_writer: &mut BitWriter, _data: &[u8]) {
-    todo!()
+fn compress_fixed(_writer: &mut BitWriter, data: &[u8]) {
+    let compressor = get_zlib_compressor();
+    let (mut ltree, mut dtree) = HuffmanTree::get_zlib_fixed();
+    ltree.assign();
+    dtree.assign();
+
+    let literal_writer = |_byte: u8| {
+        todo!();
+    };
+
+    let length_writer = |_length: usize| {
+        todo!();
+    };
+
+    let distance_writer = |_distance: usize| {
+        todo!();
+    };
+
+    let data = compressor.compress(data);
+    for unit in data {
+        match unit {
+            Literal(byte) => literal_writer(byte),
+            Marker(length, distance) => {
+                length_writer(length);
+                distance_writer(distance);
+            }
+        }
+    }
 }
 
 fn compress_dynamic(_writer: &mut BitWriter, _data: &[u8]) {
@@ -82,8 +109,7 @@ fn compress_dynamic(_writer: &mut BitWriter, _data: &[u8]) {
 #[allow(dead_code)]
 fn get_zlib_compressor() -> LZ77Compressor {
     let mut compressor = LZ77Compressor::with_window_size(ZLIB_WINDOW_SIZE);
-    compressor.min_string_length = ZLIB_MIN_STRING_LENGTH;
-    compressor.max_string_length = ZLIB_MAX_STRING_LENGTH;
-    compressor.max_string_distance = ZLIB_WINDOW_SIZE;
+    compressor.min_match_length = ZLIB_MIN_STRING_LENGTH;
+    compressor.max_match_length = ZLIB_MAX_STRING_LENGTH;
     compressor
 }
