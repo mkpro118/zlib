@@ -292,6 +292,11 @@ impl HuffmanTree {
         (literal_tree, distance_tree)
     }
 
+    #[must_use]
+    pub fn n_codes(&self) -> usize {
+        self.map.as_ref().map_or(0, |assigned| assigned.len())
+    }
+
     /// Inserts a new symbol into the Huffman tree.
     ///
     /// # Arguments
