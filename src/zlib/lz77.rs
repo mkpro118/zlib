@@ -179,8 +179,7 @@ impl LZ77Compressor {
                     let true_match_length = match_length - 1;
 
                     if found_match && true_match_length > best_match_length {
-                        best_match_distance =
-                            pos - search_start - true_match_length;
+                        best_match_distance = pos - search_start;
                         best_match_length = true_match_length;
                     }
 
