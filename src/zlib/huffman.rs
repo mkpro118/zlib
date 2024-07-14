@@ -151,6 +151,7 @@ impl HuffmanTree {
         // Convert hashmap to binary heap friendly data structure
         let mut heap = frequencies
             .into_iter()
+            .filter(|(_, count)| *count > 0)
             .map(|(sym, count)| FreqNode(count, HuffmanTreeNode::from(sym)))
             .collect::<BinaryHeap<FreqNode>>();
 
