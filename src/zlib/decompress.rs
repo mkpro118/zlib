@@ -80,10 +80,10 @@ pub fn decompress(input: &[u8]) -> Result<Vec<u8>, String> {
         acc
     });
     let checksum = u32::from_be_bytes(checksum_bytes);
-    if adler32 != checksum {
-        Err("Checksum is invalid".to_owned())
-    } else {
+    if adler32 == checksum {
         Ok(inflated)
+    } else {
+        Err("Checksum is invalid".to_owned())
     }
 }
 

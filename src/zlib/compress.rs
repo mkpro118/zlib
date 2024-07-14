@@ -98,7 +98,7 @@ fn compress_fixed(writer: &mut BitWriter, data: &[u8]) {
     for unit in compressor.compress(data) {
         match unit {
             Literal(byte) => {
-                literal_writer(&length_tree, writer, char::from(byte))
+                literal_writer(&length_tree, writer, char::from(byte));
             }
             Marker(length, distance) => {
                 length_writer(&length_tree, writer, length);
@@ -116,16 +116,16 @@ fn compress_dynamic(_writer: &mut BitWriter, _data: &[u8]) {
 }
 
 fn literal_writer(ltree: &HuffmanTree, writer: &mut BitWriter, byte: char) {
-    let byte = byte as char;
     let Some((code, len)) = ltree.encode(byte) else {
-        panic!("No encoding found for '{}'", byte);
+        panic!("No encoding found for '{byte}'");
     };
     writer.write_bits(code, len);
 }
 
+#[allow(clippy::cast_possible_truncation)]
 fn length_writer(ltree: &HuffmanTree, writer: &mut BitWriter, length: usize) {
-    assert!(length >= 3, "Length too short found {}!", length);
-    assert!(length <= 258, "Length too long found {}!", length);
+    assert!(length >= 3, "Length too short found {length}!");
+    assert!(length <= 258, "Length too long found {length}!");
 
     let code = get_length_code(length);
     let symbol = char::from_u32(code as u32).unwrap();
@@ -142,20 +142,21 @@ fn length_writer(ltree: &HuffmanTree, writer: &mut BitWriter, length: usize) {
     }
 }
 
+#[allow(clippy::cast_possible_truncation)]
 fn distance_writer(
     dtree: &HuffmanTree,
     writer: &mut BitWriter,
     distance: usize,
 ) {
-    assert!(distance >= 1, "Distance too short!");
-    assert!(distance <= 32768, "Distance too long!");
+    assert!(distance >= 1, "Distance too short, found {distance}!");
+    assert!(distance <= 32768, "Distance too long, found {distance}!");
 
     let code = get_distance_code(distance);
     let symbol =
         char::from_u32(code as u32).expect("Should convert, already checked");
     let (huffman_code, huffman_len) = dtree
         .encode(symbol)
-        .expect(format!("No encoding for {code}").as_str());
+        .unwrap_or_else(|| panic!("No encoding for {code}"));
 
     // Write 5-bit distance code
     writer.write_bits(huffman_code, huffman_len);
