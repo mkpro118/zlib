@@ -87,7 +87,7 @@ fn compress_raw(writer: &mut BitWriter, data: &[u8]) {
 fn compress_fixed(writer: &mut BitWriter, data: &[u8]) {
     // BFINAL = 1, we only write one massive block
     writer.write_bit(0b1);
-    // BTYPE
+    // BTYPE = 01, Fixed Huffman Codes
     writer.write_bits(0b01, 2);
 
     let compressor = get_zlib_compressor();
