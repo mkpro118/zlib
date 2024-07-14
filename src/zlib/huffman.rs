@@ -539,6 +539,11 @@ impl HuffmanTree {
     pub fn encode(&self, symbol: char) -> Option<(usize, usize)> {
         self.map.as_ref()?.get(&symbol).copied()
     }
+
+    #[must_use]
+    pub fn encodings(&self) -> Option<&HashMap<char, (usize, usize)>> {
+        self.map.as_ref()
+    }
 }
 
 /// Returns the alphabet for the literal/length Huffman tree.
