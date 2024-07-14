@@ -169,7 +169,6 @@ fn distance_writer(
     }
 }
 
-#[allow(dead_code)]
 fn get_zlib_compressor() -> LZ77Compressor {
     let mut compressor = LZ77Compressor::with_window_size(ZLIB_WINDOW_SIZE);
     compressor.min_match_length = ZLIB_MIN_STRING_LENGTH;
