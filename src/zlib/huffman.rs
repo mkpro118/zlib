@@ -19,7 +19,6 @@ use core::cmp::Ordering;
 use std::collections::{BinaryHeap, HashMap, VecDeque};
 
 use crate::zlib::bitreader::BitReader;
-// use crate::zlib::bitwriter::BitWriter;
 
 use crate::zlib::lz77::{LZ77Compressor, LZ77Unit};
 
