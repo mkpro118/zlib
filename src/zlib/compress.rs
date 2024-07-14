@@ -110,8 +110,12 @@ fn compress_fixed(writer: &mut BitWriter, data: &[u8]) {
     literal_writer(&length_tree, writer, '\u{100}');
 }
 
-fn compress_dynamic(_writer: &mut BitWriter, _data: &[u8]) {
-    todo!()
+fn compress_dynamic(writer: &mut BitWriter, _data: &[u8]) {
+    // BFINAL = 1, we only write one massive block
+    writer.write_bit(0b1);
+    // BTYPE = 10, Dynamic Huffman Codes
+    writer.write_bits(0b10, 2);
+
     // literal_writer(&ltree, writer, 256 as char);
 }
 
