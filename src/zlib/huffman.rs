@@ -515,6 +515,8 @@ impl HuffmanTree {
 
         while let Some((node, code, length)) = queue.pop_front() {
             if let Some(sym) = node.symbol {
+                let code =
+                    ((code as u32).reverse_bits() >> 32 - length) as usize;
                 map.insert(sym, (code, length));
             } else {
                 if let Some(ref left) = node.left {
