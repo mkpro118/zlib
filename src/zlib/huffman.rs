@@ -554,6 +554,29 @@ impl HuffmanTree {
         self.map.as_ref()
     }
 
+    pub fn to_canonical(&self) -> Self {
+        if self.map.is_none() {
+            panic!(
+                "Cannot create a canonical tree unless it has been assigned \
+                codes. Help: call tree.assign() first!"
+            );
+        }
+
+        let map = self.map.as_ref().unwrap();
+
+        let mut syms = map.keys().map(|x| *x).collect::<Vec<char>>();
+        syms.sort();
+
+        let bitlen_list = syms.iter().fold(vec![], |mut acc, sym| {
+            acc.push(map[sym].1);
+            acc
+        });
+
+        let mut tree = Self::from_bitlen_list(&bitlen_list, &syms);
+        tree.assign();
+        tree
+    }
+
     pub fn max_code_len(&self) -> usize {
         match &self.map {
             Some(map) => map.values().map(|&(_, len)| len).max().unwrap_or(0),
