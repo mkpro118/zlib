@@ -117,6 +117,7 @@ fn compress_fixed(writer: &mut BitWriter, data: &[u8]) {
     literal_writer(&length_tree, writer, '\u{100}');
 }
 
+#[allow(clippy::cast_possible_truncation)]
 fn compress_dynamic(writer: &mut BitWriter, data: &[u8]) {
     // BFINAL = 1, we only write one massive block
     writer.write_bit(0b1);
@@ -202,9 +203,9 @@ fn compress_dynamic(writer: &mut BitWriter, data: &[u8]) {
     assert!(hcodes.len() >= 4, "Should be at least 4");
 
     // Now we have all the data to write out the header
-    let hlit = (ltree_codelengths.len()) - 257;
-    let hdist = (dtree_codelengths.len()) - 1;
-    let hclen = (hcodes.len() as usize) - 4;
+    let hlit = ltree_codelengths.len() - 257;
+    let hdist = dtree_codelengths.len() - 1;
+    let hclen = hcodes.len() - 4;
 
     writer.write_bits(hlit, 5);
     writer.write_bits(hdist, 5);
@@ -265,9 +266,13 @@ fn length_writer(ltree: &HuffmanTree, writer: &mut BitWriter, length: usize) {
 
     let code = get_length_code(length);
     let symbol = char::from_u32(code as u32).unwrap();
-    let (huffman_code, huffman_len) = ltree
-        .encode(symbol)
-        .expect(format!("Frick '{symbol}' = {code} {length}").as_str());
+    let (huffman_code, huffman_len) =
+        ltree.encode(symbol).unwrap_or_else(|| {
+            panic!(
+                "Symbol '{symbol}' not found, \
+            (code = {code}, length = {length})"
+            )
+        });
 
     // Write Huffman code for the length symbol
     writer.write_bits(huffman_code, huffman_len);
@@ -330,9 +335,9 @@ fn run_length_encode(data: &[usize]) -> Vec<RunLengthEncoding> {
         }
 
         if count > 1 {
-            encoding.push(Repeat(data[pos], count))
+            encoding.push(Repeat(data[pos], count));
         } else {
-            encoding.push(Once(data[pos]))
+            encoding.push(Once(data[pos]));
         }
         pos += 1;
     }

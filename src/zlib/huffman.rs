@@ -164,7 +164,7 @@ impl HuffmanTree {
             .collect::<BinaryHeap<FreqNode>>();
 
         // In case the given frequencies were all zero
-        if heap.len() == 0 {
+        if heap.is_empty() {
             return Self::default();
         }
 
@@ -560,18 +560,18 @@ impl HuffmanTree {
         self.map.as_ref()
     }
 
+    #[must_use]
     pub fn to_canonical(&self) -> Self {
-        if self.map.is_none() {
-            panic!(
-                "Cannot create a canonical tree unless it has been assigned \
-                codes. Help: call tree.assign() first!"
-            );
-        }
+        assert!(
+            self.map.is_some(),
+            "Cannot create a canonical tree unless it has been assigned \
+            codes. Help: call tree.assign() first"
+        );
 
         let map = self.map.as_ref().unwrap();
 
-        let mut syms = map.keys().map(|x| *x).collect::<Vec<char>>();
-        syms.sort();
+        let mut syms = map.keys().copied().collect::<Vec<char>>();
+        syms.sort_unstable();
 
         let bitlen_list = syms.iter().fold(vec![], |mut acc, sym| {
             acc.push(map[sym].1);
@@ -583,6 +583,7 @@ impl HuffmanTree {
         tree
     }
 
+    #[must_use]
     pub fn max_code_len(&self) -> usize {
         match &self.map {
             Some(map) => map.values().map(|&(_, len)| len).max().unwrap_or(0),
