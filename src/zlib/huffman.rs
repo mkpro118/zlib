@@ -867,6 +867,111 @@ mod tests {
     use crate::zlib::bitreader::code_to_bytes;
 
     #[test]
+    fn test_huffman_tree_node_new() {
+        let node = HuffmanTreeNode::new();
+        assert!(node.symbol.is_none());
+        assert!(node.left.is_none());
+        assert!(node.right.is_none());
+    }
+
+    #[test]
+    fn test_huffman_tree_node_from() {
+        let node = HuffmanTreeNode::from('A');
+        assert_eq!(node.symbol, Some('A'));
+        assert!(node.left.is_none());
+        assert!(node.right.is_none());
+    }
+
+    #[test]
+    fn test_huffman_tree_from_data() {
+        let data = b"aabbbcccc";
+        let mut tree = HuffmanTree::from_data(data);
+        tree.assign();
+        assert_eq!(tree.n_codes(), 3);
+    }
+
+    #[test]
+    fn test_huffman_tree_from_freq() {
+        let mut frequencies = HashMap::new();
+        frequencies.insert('a', 2);
+        frequencies.insert('b', 3);
+        frequencies.insert('c', 4);
+        let mut tree = HuffmanTree::from_freq(frequencies);
+        tree.assign();
+        assert_eq!(tree.n_codes(), 3);
+    }
+
+    #[test]
+    fn test_huffman_tree_n_codes() {
+        let mut tree = HuffmanTree::new();
+        assert_eq!(tree.n_codes(), 0);
+        tree.insert(0b0, 1, 'A');
+        tree.insert(0b10, 2, 'B');
+        tree.insert(0b11, 2, 'C');
+        tree.assign();
+        assert_eq!(tree.n_codes(), 3);
+    }
+
+    #[test]
+    fn test_huffman_tree_assign() {
+        let mut tree = HuffmanTree::new();
+        tree.insert(0b0, 1, 'A');
+        tree.insert(0b10, 2, 'B');
+        tree.insert(0b11, 2, 'C');
+        tree.assign();
+        assert!(tree.encodings().is_some());
+        assert_eq!(tree.encodings().unwrap().len(), 3);
+    }
+
+    #[test]
+    fn test_huffman_tree_encodings() {
+        let mut tree = HuffmanTree::new();
+        tree.insert(0b0, 1, 'A');
+        tree.insert(0b10, 2, 'B');
+        tree.insert(0b11, 2, 'C');
+        tree.assign();
+        let encodings = tree.encodings().unwrap();
+        assert_eq!(encodings.get(&'A'), Some(&(0, 1)));
+        assert_eq!(encodings.get(&'B'), Some(&(1, 2)));
+        assert_eq!(encodings.get(&'C'), Some(&(3, 2)));
+    }
+
+    #[test]
+    fn test_huffman_tree_to_canonical() {
+        let mut tree = HuffmanTree::new();
+        tree.insert(0b0, 1, 'A');
+        tree.insert(0b10, 2, 'B');
+        tree.insert(0b110, 3, 'C');
+        tree.assign();
+        let canonical_tree = tree.to_canonical();
+        assert_eq!(canonical_tree.encode('A'), Some((0, 1)));
+        assert_eq!(canonical_tree.encode('B'), Some((1, 2)));
+        assert_eq!(canonical_tree.encode('C'), Some((3, 3)));
+    }
+
+    #[test]
+    fn test_huffman_tree_encode() {
+        let mut tree = HuffmanTree::new();
+        tree.insert(0b0, 1, 'A');
+        tree.insert(0b10, 2, 'B');
+        tree.insert(0b11, 2, 'C');
+        tree.assign();
+        assert_eq!(tree.encode('A'), Some((0, 1)));
+        assert_eq!(tree.encode('B'), Some((1, 2)));
+        assert_eq!(tree.encode('C'), Some((3, 2)));
+        assert_eq!(tree.encode('D'), None);
+    }
+
+    #[test]
+    fn test_huffman_tree_max_code_len() {
+        let mut tree = HuffmanTree::new();
+        tree.insert(0b0, 1, 'A');
+        tree.insert(0b10, 2, 'B');
+        tree.insert(0b110, 3, 'C');
+        assert_eq!(tree.max_code_len(), 4);
+    }
+
+    #[test]
     fn test_huffman_tree_insertion() {
         let mut tree = HuffmanTree::new();
         {
@@ -1012,5 +1117,44 @@ mod tests {
                 assert_eq!(tree.decode(&mut reader), Some(symbol));
             }
         }
+    }
+
+    #[test]
+    fn test_get_length_code() {
+        assert_eq!(get_length_code(3), 257);
+        assert_eq!(get_length_code(10), 264);
+        assert_eq!(get_length_code(258), 285);
+    }
+
+    #[test]
+    fn test_get_distance_code() {
+        assert_eq!(get_distance_code(1), 0);
+        assert_eq!(get_distance_code(5), 4);
+        assert_eq!(get_distance_code(100), 13);
+    }
+
+    #[test]
+    #[should_panic(expected = "Incompatible LZ77 window size")]
+    fn test_check_lz77_incompatible_window_size() {
+        let lz77 = LZ77Compressor::with_window_size(1024);
+        check_lz77(&lz77);
+    }
+
+    #[test]
+    #[should_panic(expected = "Incompatible LZ77 min string length")]
+    fn test_check_lz77_incompatible_min_length() {
+        let mut lz77 = LZ77Compressor::with_window_size(32768);
+        lz77.min_match_length = 2;
+        lz77.max_match_length = 258;
+        check_lz77(&lz77);
+    }
+
+    #[test]
+    #[should_panic(expected = "Incompatible LZ77 max string length")]
+    fn test_check_lz77_incompatible_max_length() {
+        let mut lz77 = LZ77Compressor::with_window_size(32768);
+        lz77.min_match_length = 3;
+        lz77.max_match_length = 259;
+        check_lz77(&lz77);
     }
 }
