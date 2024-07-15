@@ -10,6 +10,18 @@ use LZ77Unit::{Literal, Marker};
 
 const SIXTEEN_KB: usize = 16 * 1024;
 
+const PREVIOUS_CODE: usize = 16;
+const PREVIOUS_MIN: usize = 3;
+const PREVIOUS_MAX: usize = 6;
+const PREVIOUS_MIN_RANGE: usize = 4;
+/* const PREVIOUS_MAX_RANGE: usize = 7; */
+const SHORT_ZERO_CODE: usize = 17;
+const LONG_ZERO_CODE: usize = 18;
+const SHORT_ZERO_MIN: usize = 3;
+const SHORT_ZERO_MAX: usize = 10;
+const LONG_ZERO_MIN: usize = 11;
+const LONG_ZERO_MAX: usize = 138;
+
 #[derive(Debug)]
 pub enum Strategy {
     Auto,
@@ -23,6 +35,8 @@ enum RunLengthEncoding {
     Once(usize),
     Repeat(usize, usize),
 }
+
+use RunLengthEncoding::{Once, Repeat};
 
 #[allow(
     clippy::unusual_byte_groupings,
@@ -395,81 +409,76 @@ fn run_length_encode(data: &[usize]) -> Vec<RunLengthEncoding> {
 }
 
 fn rle_to_zlib_codes(rle: &[RunLengthEncoding]) -> Vec<(usize, Option<usize>)> {
-    use RunLengthEncoding::{Once, Repeat};
-    const PREVIOUS_CODE: usize = 16;
-    const PREVIOUS_MIN: usize = 3;
-    const PREVIOUS_MAX: usize = 6;
-    const PREVIOUS_MIN_RANGE: usize = 4;
-    /* const PREVIOUS_MAX_RANGE: usize = 7; */
-    const SHORT_ZERO_CODE: usize = 17;
-    const LONG_ZERO_CODE: usize = 18;
-    const SHORT_ZERO_MIN: usize = 3;
-    const SHORT_ZERO_MAX: usize = 10;
-    const LONG_ZERO_MIN: usize = 11;
-    const LONG_ZERO_MAX: usize = 138;
-
     rle.iter().fold(vec![], |mut acc, encoded| {
         match encoded {
             Once(num) => acc.push((*num, None)),
-            Repeat(num, mut repetitions) => {
-                let num = *num;
-                if num == 0 {
-                    while repetitions > 0 {
-                        match repetitions {
-                            SHORT_ZERO_MIN..=SHORT_ZERO_MAX => {
-                                acc.push((SHORT_ZERO_CODE, Some(repetitions)));
-                                break;
-                            }
-                            LONG_ZERO_MIN.. => {
-                                let current_count =
-                                    if repetitions > LONG_ZERO_MAX {
-                                        repetitions -= LONG_ZERO_MAX;
-                                        LONG_ZERO_MAX
-                                    } else {
-                                        let temp = repetitions;
-                                        repetitions = 0;
-                                        temp
-                                    };
-                                acc.push((LONG_ZERO_CODE, Some(current_count)));
-                            }
-                            _ => {
-                                acc.extend_from_slice(
-                                    &[(0, None)].repeat(repetitions),
-                                );
-                                break;
-                            }
-                        }
-                    }
+            Repeat(num, repetitions) => {
+                if *num == 0 {
+                    zlib_rle_encode_zero(&mut acc, *repetitions);
                 } else {
-                    while repetitions > 0 {
-                        match repetitions {
-                            ..=PREVIOUS_MIN => {
-                                acc.extend_from_slice(
-                                    &[(num, None)].repeat(repetitions),
-                                );
-                                break;
-                            }
-                            PREVIOUS_MIN_RANGE.. => {
-                                acc.push((num, None));
-                                repetitions -= 1;
-                                let current_count =
-                                    if repetitions > PREVIOUS_MAX {
-                                        repetitions -= PREVIOUS_MAX;
-                                        PREVIOUS_MAX
-                                    } else {
-                                        let temp = repetitions;
-                                        repetitions = 0;
-                                        temp
-                                    };
-                                acc.push((PREVIOUS_CODE, Some(current_count)));
-                            }
-                        }
-                    }
+                    zlib_rle_encode_nonzero(&mut acc, *num, *repetitions);
                 }
             }
         };
         acc
     })
+}
+
+fn zlib_rle_encode_zero(
+    acc: &mut Vec<(usize, Option<usize>)>,
+    mut repetitions: usize,
+) {
+    while repetitions > 0 {
+        match repetitions {
+            SHORT_ZERO_MIN..=SHORT_ZERO_MAX => {
+                acc.push((SHORT_ZERO_CODE, Some(repetitions)));
+                break;
+            }
+            LONG_ZERO_MIN.. => {
+                let current_count = if repetitions > LONG_ZERO_MAX {
+                    repetitions -= LONG_ZERO_MAX;
+                    LONG_ZERO_MAX
+                } else {
+                    let temp = repetitions;
+                    repetitions = 0;
+                    temp
+                };
+                acc.push((LONG_ZERO_CODE, Some(current_count)));
+            }
+            _ => {
+                acc.extend_from_slice(&[(0, None)].repeat(repetitions));
+                break;
+            }
+        }
+    }
+}
+
+fn zlib_rle_encode_nonzero(
+    acc: &mut Vec<(usize, Option<usize>)>,
+    num: usize,
+    mut repetitions: usize,
+) {
+    while repetitions > 0 {
+        match repetitions {
+            ..=PREVIOUS_MIN => {
+                acc.extend_from_slice(&[(num, None)].repeat(repetitions));
+                break;
+            }
+            PREVIOUS_MIN_RANGE.. => {
+                acc.push((num, None));
+                repetitions -= 1;
+                let current_count = if repetitions > PREVIOUS_MAX {
+                    repetitions -= PREVIOUS_MAX;
+                    PREVIOUS_MAX
+                } else {
+                    let temp = repetitions;
+                    repetitions = 0;
+                    temp
+                };
+                acc.push((PREVIOUS_CODE, Some(current_count)));
+            }
+        }
+    }
 }
 
 #[cfg(test)]
