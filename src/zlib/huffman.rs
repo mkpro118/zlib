@@ -334,7 +334,7 @@ impl HuffmanTree {
             })
     }
 
-    /// Constructs Huffman trees for the ZLib fixed compression strategy.
+    /// Constructs Huffman trees for the `ZLib` fixed compression strategy.
     ///
     /// # Returns
     /// A tuple of two trees, the first is the literal/length tree
@@ -690,6 +690,13 @@ impl HuffmanTree {
     ///
     /// This operation requires codes to be assigned, see [`HuffmanTree::assign`]
     ///
+    /// # Panics
+    ///
+    /// This operation will panic if `tree.assign()` has not yet been called.
+    /// This implementation of converting codes to canonical form requires
+    /// the bit length of each symbol's code, which is created when `assign`
+    /// is called.
+    ///
     /// # Examples
     ///
     /// ```
@@ -800,11 +807,11 @@ pub fn distance_tree_alphabet() -> Vec<char> {
     (0u8..30u8).map(|x| x as char).collect::<Vec<char>>()
 }
 
-/// Checks if the given LZ77Compressor has compatible parameters for ZLIB compression.
+/// Checks if the given `LZ77Compressor` has compatible parameters for `Zlib` compression.
 ///
 /// # Panics
 ///
-/// Panics if the LZ77Compressor parameters are incompatible with ZLIB requirements.
+/// Panics if the `LZ77Compressor` parameters are incompatible with `Zlib` requirements.
 fn check_lz77(lz77: &LZ77Compressor) {
     assert_eq!(
         lz77.window_size, ZLIB_WINDOW_SIZE,
