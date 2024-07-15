@@ -59,6 +59,7 @@ struct HuffmanTreeNode {
     right: Option<Box<HuffmanTreeNode>>,
 }
 
+#[derive(Debug)]
 struct FreqNode(usize, HuffmanTreeNode);
 
 /// Represents a Huffman tree used for encoding and decoding.
@@ -161,6 +162,11 @@ impl HuffmanTree {
             .filter(|(_, count)| *count > 0)
             .map(|(sym, count)| FreqNode(count, HuffmanTreeNode::from(sym)))
             .collect::<BinaryHeap<FreqNode>>();
+
+        // In case the given frequencies were all zero
+        if heap.len() == 0 {
+            return Self::default();
+        }
 
         // Build the huffman tree using the Huffman Encoding algorithm
         while heap.len() > 1 {
