@@ -83,6 +83,7 @@ impl HuffmanTreeNode {
         }
     }
 
+    /// Creates a new `HuffmanTreeNode` with the given symbol.
     pub fn from(symbol: char) -> Self {
         Self {
             symbol: Some(symbol),
@@ -142,6 +143,16 @@ impl HuffmanTree {
         }
     }
 
+    /// Creates a `HuffmanTree` from the given byte data.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use mini_git::zlib::huffman::HuffmanTree;
+    ///
+    /// let data = b"hello world";
+    /// let tree = HuffmanTree::from_data(data);
+    /// ```
     #[must_use]
     pub fn from_data(data: &[u8]) -> Self {
         let map = data.iter().fold(HashMap::new(), |mut map, &sym| {
@@ -153,6 +164,20 @@ impl HuffmanTree {
         Self::from_freq(map)
     }
 
+    /// Creates a `HuffmanTree` from a frequency map.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use std::collections::HashMap;
+    /// use mini_git::zlib::huffman::HuffmanTree;
+    ///
+    /// let mut frequencies = HashMap::new();
+    /// frequencies.insert('a', 3);
+    /// frequencies.insert('b', 2);
+    /// frequencies.insert('c', 1);
+    /// let tree = HuffmanTree::from_freq(frequencies);
+    /// ```
     #[must_use]
     #[allow(clippy::missing_panics_doc)]
     pub fn from_freq(frequencies: HashMap<char, usize>) -> Self {
@@ -188,6 +213,24 @@ impl HuffmanTree {
         }
     }
 
+    /// Creates two Huffman trees (literal/length and distance) from LZ77-compressed data.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use mini_git::zlib::{huffman::*, lz77::LZ77Compressor};
+    ///
+    /// let data = b"abc".repeat(100);
+    ///
+    /// // Setup the compressor to be zlib compatible
+    /// let mut lz77_compressor = LZ77Compressor::with_window_size(ZLIB_WINDOW_SIZE);
+    /// lz77_compressor.min_match_length = ZLIB_MIN_STRING_LENGTH;
+    /// lz77_compressor.max_match_length = ZLIB_MAX_STRING_LENGTH;
+    ///
+    /// let lz77_data = lz77_compressor.compress(&data);
+    ///
+    /// let (lit_tree, dist_tree) = HuffmanTree::from_lz77(&lz77_data, &lz77_compressor);
+    /// ```
     #[must_use]
     #[allow(clippy::missing_panics_doc, clippy::cast_possible_truncation)]
     pub fn from_lz77(data: &[LZ77Unit], lz77: &LZ77Compressor) -> (Self, Self) {
@@ -291,6 +334,19 @@ impl HuffmanTree {
             })
     }
 
+    /// Constructs Huffman trees for the ZLib fixed compression strategy.
+    ///
+    /// # Returns
+    /// A tuple of two trees, the first is the literal/length tree
+    /// the second is the distance tree.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use mini_git::zlib::huffman::HuffmanTree;
+    ///
+    /// let (lit_tree, dist_tree) = HuffmanTree::get_zlib_fixed();
+    /// ```
     #[must_use]
     pub fn get_zlib_fixed() -> (Self, Self) {
         let mut bitlen = vec![8; 144];
@@ -308,6 +364,18 @@ impl HuffmanTree {
         (literal_tree, distance_tree)
     }
 
+    /// Returns the number of codes in the Huffman tree.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use mini_git::zlib::huffman::HuffmanTree;
+    ///
+    /// let tree = HuffmanTree::new();
+    /// let n_codes = tree.n_codes();
+    ///
+    /// assert_eq!(n_codes, 0); // Should be zero for an empty tree
+    /// ```
     #[must_use]
     pub fn n_codes(&self) -> usize {
         self.map.as_ref().map_or(0, HashMap::len)
@@ -521,6 +589,30 @@ impl HuffmanTree {
         (lit_tree, dist_tree)
     }
 
+    /// Assigns codes to symbols in the Huffman tree.
+    ///
+    /// This function is primarily used for encoding, and delays actually
+    /// assigning codes until necessary, as the encoding is not required for
+    /// decoding.
+    ///
+    /// See [`HuffmanTree::encode`]
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use mini_git::zlib::huffman::HuffmanTree;
+    ///
+    /// let data = b"abc".repeat(5);
+    ///
+    /// // This creates a tree, and can be used for decoding, but not encoding.
+    /// let mut tree = HuffmanTree::from_data(&data);
+    ///
+    /// // Assign codes to the symbols
+    /// tree.assign();
+    ///
+    /// // Now the tree can used for encoding.
+    /// assert_eq!(Some((1, 2)), tree.encode('a'));
+    /// ```
     #[allow(clippy::missing_panics_doc, clippy::cast_possible_truncation)]
     pub fn assign(&mut self) {
         if self.map.is_none() {
@@ -550,16 +642,65 @@ impl HuffmanTree {
         }
     }
 
+    /// Encodes a symbol using the Huffman tree.
+    ///
+    /// See [`HuffmanTree::assign`]
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// // Setup is the same as HuffmanTree::assign
+    /// # use mini_git::zlib::huffman::HuffmanTree;
+    /// #
+    /// # let data = b"abc".repeat(5);
+    /// #
+    /// # // This creates a tree, and can be used for decoding, but not encoding.
+    /// # let mut tree = HuffmanTree::from_data(&data);
+    /// #
+    /// # // Assign codes to the symbols
+    /// # tree.assign();
+    /// let encoded = tree.encode('a');
+    /// assert_eq!(Some((1, 2)), encoded);
+    /// ```
     #[must_use]
     pub fn encode(&self, symbol: char) -> Option<(usize, usize)> {
         self.map.as_ref()?.get(&symbol).copied()
     }
 
+    /// Returns a reference to the internal map of encodings.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use mini_git::zlib::huffman::HuffmanTree;
+    /// let tree = HuffmanTree::new();
+    ///
+    /// // Add some nodes to the tree and assign codes
+    ///
+    /// let encodings = tree.encodings();
+    /// println!("{encodings:?}");
+    /// ```
     #[must_use]
     pub fn encodings(&self) -> Option<&HashMap<char, (usize, usize)>> {
         self.map.as_ref()
     }
 
+    /// Converts the current Huffman tree to its canonical form.
+    /// This form is compatible with Zlib compression
+    ///
+    /// This operation requires codes to be assigned, see [`HuffmanTree::assign`]
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use mini_git::zlib::huffman::HuffmanTree;
+    /// let mut tree = HuffmanTree::new();
+    /// // Add some nodes to the tree and assign codes
+    ///
+    /// // Important: Codes must be assigned before converting to canonical form
+    /// tree.assign();
+    /// let canonical_tree = tree.to_canonical();
+    /// ```
     #[must_use]
     pub fn to_canonical(&self) -> Self {
         assert!(
@@ -583,6 +724,17 @@ impl HuffmanTree {
         tree
     }
 
+    /// Returns the maximum code length in the Huffman tree.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use mini_git::zlib::huffman::HuffmanTree;
+    /// let tree = HuffmanTree::new();
+    /// // Add some nodes to the tree
+    /// let max_len = tree.max_code_len();
+    /// println!("{max_len}");
+    /// ```
     #[must_use]
     pub fn max_code_len(&self) -> usize {
         match &self.map {
@@ -591,6 +743,7 @@ impl HuffmanTree {
         }
     }
 
+    /// Helper function to get the depth of a node in the Huffman tree.
     fn get_depth(root: &HuffmanTreeNode) -> usize {
         let left_depth = root.left.as_deref().map_or(0, Self::get_depth);
         let right_depth = root.right.as_deref().map_or(0, Self::get_depth);
@@ -647,6 +800,11 @@ pub fn distance_tree_alphabet() -> Vec<char> {
     (0u8..30u8).map(|x| x as char).collect::<Vec<char>>()
 }
 
+/// Checks if the given LZ77Compressor has compatible parameters for ZLIB compression.
+///
+/// # Panics
+///
+/// Panics if the LZ77Compressor parameters are incompatible with ZLIB requirements.
 fn check_lz77(lz77: &LZ77Compressor) {
     assert_eq!(
         lz77.window_size, ZLIB_WINDOW_SIZE,
@@ -667,6 +825,16 @@ fn check_lz77(lz77: &LZ77Compressor) {
     );
 }
 
+/// Returns the length code for a given length.
+///
+/// # Examples
+///
+/// ```
+/// use mini_git::zlib::huffman::get_length_code;
+/// let length = 10;
+/// let length_code = get_length_code(length);
+/// assert_eq!(257 + 7, length_code); // Values are offset by 257
+/// ```
 #[must_use]
 pub fn get_length_code(length: usize) -> usize {
     match LENGTH_BASE.binary_search(&length) {
@@ -675,6 +843,16 @@ pub fn get_length_code(length: usize) -> usize {
     }
 }
 
+/// Returns the distance code for a given distance.
+///
+/// # Examples
+///
+/// ```
+/// use mini_git::zlib::huffman::get_distance_code;
+/// let distance = 100;
+/// let distance_code = get_distance_code(distance);
+/// assert_eq!(13, distance_code);
+/// ```
 #[must_use]
 pub fn get_distance_code(distance: usize) -> usize {
     match DISTANCE_BASE.binary_search(&distance) {
