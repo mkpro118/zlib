@@ -1,5 +1,3 @@
-#![allow(clippy::missing_errors_doc, clippy::missing_panics_doc)]
-
 use crate::zlib::adler::adler32;
 use crate::zlib::bitwriter::BitWriter;
 use crate::zlib::huffman::{
@@ -26,7 +24,11 @@ enum RunLengthEncoding {
     Repeat(usize, usize),
 }
 
-#[allow(clippy::unusual_byte_groupings, clippy::cast_possible_truncation)]
+#[allow(
+    clippy::unusual_byte_groupings,
+    clippy::cast_possible_truncation,
+    clippy::missing_panics_doc
+)]
 #[must_use]
 pub fn compress(data: &[u8], strategy: &Strategy) -> Vec<u8> {
     use Strategy::{Auto, Dynamic, Fixed, Raw};
@@ -102,19 +104,8 @@ fn compress_fixed(writer: &mut BitWriter, data: &[u8]) {
     length_tree.assign();
     distance_tree.assign();
 
-    for unit in compressor.compress(data) {
-        match unit {
-            Literal(byte) => {
-                literal_writer(&length_tree, writer, char::from(byte));
-            }
-            Marker(length, distance) => {
-                length_writer(&length_tree, writer, length);
-                distance_writer(&distance_tree, writer, distance);
-            }
-        }
-    }
-
-    literal_writer(&length_tree, writer, '\u{100}');
+    let compressed = compressor.compress(data);
+    write_compressed_data(writer, &compressed, &length_tree, &distance_tree);
 }
 
 #[allow(clippy::cast_possible_truncation)]
@@ -127,80 +118,24 @@ fn compress_dynamic(writer: &mut BitWriter, data: &[u8]) {
     let compressor = get_zlib_compressor();
     let compressed = compressor.compress(data);
 
-    let (mut ltree, mut dtree) =
-        HuffmanTree::from_lz77(&compressed, &compressor);
+    let (ltree, dtree) = create_dynamic_trees(&compressed, &compressor);
 
-    let (lmax, dmax) = (ltree.max_code_len(), dtree.max_code_len());
-    assert!(
-        lmax <= 15,
-        "The Literal/Length code lengths are too long, found {lmax}"
-    );
-    assert!(
-        dmax <= 15,
-        "The Distance code lengths are too long, found {dmax}"
-    );
-    ltree.assign();
-    dtree.assign();
-    let (ltree, dtree) = (ltree.to_canonical(), dtree.to_canonical());
+    write_dynamic_header(writer, &ltree, &dtree);
 
-    let ltree_encodings = ltree
-        .encodings()
-        .expect("Should exist, codes have been assigned");
-    let dtree_encodings = dtree
-        .encodings()
-        .expect("Should exist, codes have been assigned");
+    // the easy part, write out the data
+    write_compressed_data(writer, &compressed, &ltree, &dtree);
+}
 
-    let ltree_max_value = *ltree_encodings
-        .keys()
-        .max()
-        .filter(|&max| *max > '\u{100}')
-        .unwrap_or(&'\u{101}');
-    let dtree_max_value = *dtree_encodings.keys().max().unwrap_or(&(1 as char));
-
-    let ltree_codelengths = ((0 as char)..=ltree_max_value)
-        .map(|c| ltree.encode(c).map_or(0, |(_, len)| len))
-        .collect::<Vec<usize>>();
-
-    let dtree_codelengths = ((0 as char)..=dtree_max_value)
-        .map(|c| dtree.encode(c).map_or(0, |(_, len)| len))
-        .collect::<Vec<usize>>();
-
-    let ltree_run_length = run_length_encode(&ltree_codelengths);
-    let ltree_run_length = rle_to_zlib_codes(&ltree_run_length);
-    let dtree_run_length = run_length_encode(&dtree_codelengths);
-    let dtree_run_length = rle_to_zlib_codes(&dtree_run_length);
-
-    let combined = [ltree_run_length, dtree_run_length].concat();
-    let codes_only = combined
-        .iter()
-        .map(|&(code, _)| code as u8)
-        .collect::<Vec<u8>>();
-
-    let mut code_tree = HuffmanTree::from_data(&codes_only);
-    code_tree.assign();
-    let code_tree = code_tree.to_canonical();
-
-    let cmax = code_tree.max_code_len();
-    assert!(
-        cmax <= 7,
-        "The Code code lengths are too long, found {cmax}"
-    );
-
-    let hcodes = CODE_LENGTH_CODES_ORDER
-        .iter()
-        .map(|&code| {
-            code_tree
-                .encode(
-                    char::from_u32(code as u32).expect("Should be in range"),
-                )
-                .map_or(0, |(_, len)| len)
-        })
-        .collect::<Vec<usize>>();
-
-    let trailing_zeros = hcodes.iter().rev().position(|&x| x > 0).unwrap_or(0);
-    let hcodes = &hcodes[..(hcodes.len() - trailing_zeros)];
-
-    assert!(hcodes.len() >= 4, "Should be at least 4");
+#[allow(clippy::cast_possible_truncation)]
+fn write_dynamic_header(
+    writer: &mut BitWriter,
+    ltree: &HuffmanTree,
+    dtree: &HuffmanTree,
+) {
+    let (ltree_codelengths, dtree_codelengths) = get_codelengths(ltree, dtree);
+    let combined_rle = zlib_rle(&ltree_codelengths, &dtree_codelengths);
+    let code_tree = get_code_tree(&combined_rle);
+    let hcodes = get_hcodes(&code_tree);
 
     // Now we have all the data to write out the header
     let hlit = ltree_codelengths.len() - 257;
@@ -213,12 +148,12 @@ fn compress_dynamic(writer: &mut BitWriter, data: &[u8]) {
 
     // Write out the (hclen + 4) * 3 bits of code lengths for the code length
     // alphabet
-    for &hcode in hcodes {
+    for hcode in hcodes {
         writer.write_bits(hcode, 3);
     }
 
     // Write out the encoded huffman literal/length and distance trees
-    for (codelength, extra) in combined {
+    for (codelength, extra) in combined_rle {
         let sym =
             char::from_u32(codelength as u32).expect("Should be in range");
         let (encoded, len) =
@@ -235,21 +170,46 @@ fn compress_dynamic(writer: &mut BitWriter, data: &[u8]) {
             writer.write_bits(extra_len, nbits);
         }
     }
+}
 
-    // the easy part, write out the data
+fn write_compressed_data(
+    writer: &mut BitWriter,
+    compressed: &[LZ77Unit],
+    ltree: &HuffmanTree,
+    dtree: &HuffmanTree,
+) {
     for unit in compressed {
         match unit {
             Literal(byte) => {
-                literal_writer(&ltree, writer, char::from(byte));
+                literal_writer(ltree, writer, char::from(*byte));
             }
             Marker(length, distance) => {
-                length_writer(&ltree, writer, length);
-                distance_writer(&dtree, writer, distance);
+                length_writer(ltree, writer, *length);
+                distance_writer(dtree, writer, *distance);
             }
         }
     }
+    literal_writer(ltree, writer, '\u{100}');
+}
 
-    literal_writer(&ltree, writer, '\u{100}');
+fn create_dynamic_trees(
+    compressed: &[LZ77Unit],
+    compressor: &LZ77Compressor,
+) -> (HuffmanTree, HuffmanTree) {
+    let (mut ltree, mut dtree) = HuffmanTree::from_lz77(compressed, compressor);
+
+    let (lmax, dmax) = (ltree.max_code_len(), dtree.max_code_len());
+    assert!(
+        lmax <= 15,
+        "The Literal/Length code lengths are too long, found {lmax}"
+    );
+    assert!(
+        dmax <= 15,
+        "The Distance code lengths are too long, found {dmax}"
+    );
+    ltree.assign();
+    dtree.assign();
+    (ltree.to_canonical(), dtree.to_canonical())
 }
 
 fn literal_writer(ltree: &HuffmanTree, writer: &mut BitWriter, byte: char) {
@@ -312,11 +272,100 @@ fn distance_writer(
     }
 }
 
+fn get_codelengths(
+    ltree: &HuffmanTree,
+    dtree: &HuffmanTree,
+) -> (Vec<usize>, Vec<usize>) {
+    // Get all encodings
+    let ltree_encodings = ltree
+        .encodings()
+        .expect("Should exist, codes have been assigned");
+    let dtree_encodings = dtree
+        .encodings()
+        .expect("Should exist, codes have been assigned");
+
+    // Get the maximum length/distance values, these will eventually
+    // be used to compute hlit and hdist
+    let ltree_max_value = *ltree_encodings
+        .keys()
+        .max()
+        .filter(|&max| *max > '\u{100}')
+        .unwrap_or(&'\u{101}');
+    let dtree_max_value = *dtree_encodings.keys().max().unwrap_or(&(1 as char));
+
+    // Extract just the length of the codes, not the codes themselves
+    let ltree_codelengths = ((0 as char)..=ltree_max_value)
+        .map(|c| ltree.encode(c).map_or(0, |(_, len)| len))
+        .collect::<Vec<usize>>();
+
+    let dtree_codelengths = ((0 as char)..=dtree_max_value)
+        .map(|c| dtree.encode(c).map_or(0, |(_, len)| len))
+        .collect::<Vec<usize>>();
+
+    (ltree_codelengths, dtree_codelengths)
+}
+
+#[allow(clippy::cast_possible_truncation)]
+fn get_code_tree(combined: &[(usize, Option<usize>)]) -> HuffmanTree {
+    let codes_only = combined
+        .iter()
+        .map(|&(code, _)| code as u8)
+        .collect::<Vec<u8>>();
+
+    // This combined codes is our data, make a tree from these codes.
+    let mut code_tree = HuffmanTree::from_data(&codes_only);
+    code_tree.assign();
+    let code_tree = code_tree.to_canonical();
+
+    // Sanity check
+    let cmax = code_tree.max_code_len();
+    assert!(
+        cmax <= 7,
+        "The Code code lengths are too long, found {cmax}"
+    );
+
+    code_tree
+}
+
+#[allow(clippy::cast_possible_truncation)]
+fn get_hcodes(code_tree: &HuffmanTree) -> Vec<usize> {
+    let hcodes = CODE_LENGTH_CODES_ORDER
+        .iter()
+        .map(|&code| {
+            code_tree
+                .encode(
+                    char::from_u32(code as u32).expect("Should be in range"),
+                )
+                .map_or(0, |(_, len)| len)
+        })
+        .collect::<Vec<usize>>();
+
+    let trailing_zeros = hcodes.iter().rev().position(|&x| x > 0).unwrap_or(0);
+    let hcodes = hcodes[..(hcodes.len() - trailing_zeros)].to_vec();
+
+    assert!(hcodes.len() >= 4, "Should be at least 4");
+    hcodes
+}
+
 fn get_zlib_compressor() -> LZ77Compressor {
     let mut compressor = LZ77Compressor::with_window_size(ZLIB_WINDOW_SIZE);
     compressor.min_match_length = ZLIB_MIN_STRING_LENGTH;
     compressor.max_match_length = ZLIB_MAX_STRING_LENGTH;
     compressor
+}
+
+fn zlib_rle(
+    ltree_codelengths: &[usize],
+    dtree_codelengths: &[usize],
+) -> Vec<(usize, Option<usize>)> {
+    // Run Length Encode the codelengths
+    let ltree_run_length = run_length_encode(ltree_codelengths);
+    let ltree_run_length = rle_to_zlib_codes(&ltree_run_length);
+    let dtree_run_length = run_length_encode(dtree_codelengths);
+    let dtree_run_length = rle_to_zlib_codes(&dtree_run_length);
+
+    // Combine into one long sequence
+    [ltree_run_length, dtree_run_length].concat()
 }
 
 fn run_length_encode(data: &[usize]) -> Vec<RunLengthEncoding> {
