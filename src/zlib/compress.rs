@@ -12,11 +12,18 @@ use LZ77Unit::{Literal, Marker};
 
 const SIXTEEN_KB: usize = 16 * 1024;
 
+#[derive(Debug)]
 pub enum Strategy {
     Auto,
     Dynamic,
     Fixed,
     Raw,
+}
+
+#[derive(Debug)]
+enum RunLengthEncoding {
+    Once(usize),
+    Repeat(usize, usize),
 }
 
 #[allow(clippy::unusual_byte_groupings, clippy::cast_possible_truncation)]
@@ -110,11 +117,54 @@ fn compress_fixed(writer: &mut BitWriter, data: &[u8]) {
     literal_writer(&length_tree, writer, '\u{100}');
 }
 
-fn compress_dynamic(writer: &mut BitWriter, _data: &[u8]) {
+fn compress_dynamic(writer: &mut BitWriter, data: &[u8]) {
     // BFINAL = 1, we only write one massive block
     writer.write_bit(0b1);
     // BTYPE = 10, Dynamic Huffman Codes
     writer.write_bits(0b10, 2);
+
+    let compressor = get_zlib_compressor();
+    let compressed = compressor.compress(data);
+
+    let (mut ltree, mut dtree) =
+        HuffmanTree::from_lz77(&compressed, &compressor);
+    ltree.assign();
+    dtree.assign();
+
+    let (lmax, dmax) = (ltree.max_code_len(), dtree.max_code_len());
+    assert!(
+        lmax <= 15,
+        "The Literal/Length code lengths are too long, found {lmax}"
+    );
+    assert!(
+        dmax <= 15,
+        "The Distance code lengths are too long, found {dmax}"
+    );
+
+    let ltree_encodings = ltree
+        .encodings()
+        .expect("Should exist, codes have been assigned");
+    let dtree_encodings = dtree
+        .encodings()
+        .expect("Should exist, codes have been assigned");
+
+    let ltree_max_value = *ltree_encodings
+        .keys()
+        .max()
+        .filter(|&max| *max > '\u{100}')
+        .unwrap_or(&'\u{101}');
+    let dtree_max_value = *dtree_encodings.keys().max().unwrap_or(&(0 as char));
+
+    let ltree_codelengths = ((0 as char)..=ltree_max_value)
+        .map(|c| ltree.encode(c).map_or(0, |(_, len)| len))
+        .collect::<Vec<usize>>();
+
+    let dtree_codelengths = ((0 as char)..=dtree_max_value)
+        .map(|c| ltree.encode(c).map_or(0, |(_, len)| len))
+        .collect::<Vec<usize>>();
+
+    let ltree_run_length = run_length_encode(&ltree_codelengths);
+    let dtree_run_length = run_length_encode(&dtree_codelengths);
 
     // literal_writer(&ltree, writer, 256 as char);
 }
@@ -180,6 +230,32 @@ fn get_zlib_compressor() -> LZ77Compressor {
     compressor
 }
 
+fn run_length_encode(data: &[usize]) -> Vec<RunLengthEncoding> {
+    use RunLengthEncoding::{Once, Repeat};
+    let len = data.len();
+
+    let mut encoding = vec![];
+    let mut pos = 0;
+
+    while pos < len {
+        let mut count = 1;
+
+        while pos + 1 < len && data[pos] == data[pos + 1] {
+            pos += 1;
+            count += 1;
+        }
+
+        if count > 1 {
+            encoding.push(Repeat(data[pos], count))
+        } else {
+            encoding.push(Once(data[pos]))
+        }
+        pos += 1;
+    }
+
+    encoding
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -238,5 +314,18 @@ mod tests {
 
             assert_eq!(bytes, decompressed);
         }
+    }
+
+    #[test]
+    fn test_dyn() {
+        let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+        let license = root.join("LICENSE.comp");
+        let bytes = fs::read(license).expect("Read file!");
+
+        // let compressed = compress(&bytes, &Strategy::Fixed);
+        let _decompressed = decompress(&bytes).expect("Correct decompression");
+
+        // assert_eq!(bytes, decompressed);
+        panic!()
     }
 }
