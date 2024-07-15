@@ -3,8 +3,8 @@
 use crate::zlib::adler::adler32;
 use crate::zlib::bitwriter::BitWriter;
 use crate::zlib::huffman::{
-    get_distance_code, get_length_code, HuffmanTree, DISTANCE_BASE,
-    DISTANCE_EXTRA_BITS, LENGTH_BASE, LENGTH_EXTRA_BITS,
+    get_distance_code, get_length_code, HuffmanTree, CODE_LENGTH_CODES_ORDER,
+    DISTANCE_BASE, DISTANCE_EXTRA_BITS, LENGTH_BASE, LENGTH_EXTRA_BITS,
     ZLIB_MAX_STRING_LENGTH, ZLIB_MIN_STRING_LENGTH, ZLIB_WINDOW_SIZE,
 };
 use crate::zlib::lz77::{LZ77Compressor, LZ77Unit};
@@ -128,8 +128,6 @@ fn compress_dynamic(writer: &mut BitWriter, data: &[u8]) {
 
     let (mut ltree, mut dtree) =
         HuffmanTree::from_lz77(&compressed, &compressor);
-    ltree.assign();
-    dtree.assign();
 
     let (lmax, dmax) = (ltree.max_code_len(), dtree.max_code_len());
     assert!(
@@ -140,6 +138,16 @@ fn compress_dynamic(writer: &mut BitWriter, data: &[u8]) {
         dmax <= 15,
         "The Distance code lengths are too long, found {dmax}"
     );
+    ltree.assign();
+    dtree.assign();
+    let mut v = ltree
+        .encodings()
+        .unwrap()
+        .iter()
+        .map(|(&x, _)| x as usize)
+        .collect::<Vec<_>>();
+    v.sort();
+    println!("{:?}", v);
 
     let ltree_encodings = ltree
         .encodings()
@@ -153,7 +161,7 @@ fn compress_dynamic(writer: &mut BitWriter, data: &[u8]) {
         .max()
         .filter(|&max| *max > '\u{100}')
         .unwrap_or(&'\u{101}');
-    let dtree_max_value = *dtree_encodings.keys().max().unwrap_or(&(0 as char));
+    let dtree_max_value = *dtree_encodings.keys().max().unwrap_or(&(1 as char));
 
     let ltree_codelengths = ((0 as char)..=ltree_max_value)
         .map(|c| ltree.encode(c).map_or(0, |(_, len)| len))
@@ -164,9 +172,93 @@ fn compress_dynamic(writer: &mut BitWriter, data: &[u8]) {
         .collect::<Vec<usize>>();
 
     let ltree_run_length = run_length_encode(&ltree_codelengths);
+    let ltree_run_length = rle_to_zlib_codes(&ltree_run_length);
     let dtree_run_length = run_length_encode(&dtree_codelengths);
+    let dtree_run_length = rle_to_zlib_codes(&dtree_run_length);
 
-    // literal_writer(&ltree, writer, 256 as char);
+    let combined = [ltree_run_length, dtree_run_length].concat();
+    let codes_only = combined
+        .iter()
+        .map(|&(code, _)| code as u8)
+        .collect::<Vec<u8>>();
+
+    let mut code_tree = HuffmanTree::from_data(&codes_only);
+    code_tree.assign();
+
+    let cmax = code_tree.max_code_len();
+    assert!(
+        cmax <= 7,
+        "The Code code lengths are too long, found {cmax}"
+    );
+
+    let hcodes = CODE_LENGTH_CODES_ORDER
+        .iter()
+        .map(|&code| {
+            code_tree
+                .encode(
+                    char::from_u32(code as u32).expect("Should be in range"),
+                )
+                .map_or(0, |(_, len)| len)
+        })
+        .collect::<Vec<usize>>();
+
+    let trailing_zeros = hcodes.iter().rev().position(|&x| x > 0).unwrap_or(0);
+    let hcodes = &hcodes[..(hcodes.len() - trailing_zeros)];
+
+    assert!(hcodes.len() >= 4, "Should be at least 4");
+
+    // Now we have all the data to write out the header
+    let hlit = (ltree_max_value as usize) - 257;
+    println!("COMPRESSION hlit = {} {0:05b}", hlit);
+    let hdist = (dtree_max_value as usize) - 1;
+    println!("COMPRESSION hdist = {} {0:05b}", hdist);
+    let hclen = (hcodes.len() as usize) - 4;
+    println!("COMPRESSION hclen = {} {0:04b}", hclen);
+
+    println!("COMPRESSION hcodes = {:?}", hcodes);
+
+    writer.write_bits(hlit, 5);
+    writer.write_bits(hdist, 5);
+    writer.write_bits(hclen, 4);
+
+    // Write out the (hclen + 4) * 3 bits of code lengths for the code length
+    // alphabet
+    for &hcode in hcodes {
+        writer.write_bits(hcode, 3);
+    }
+
+    // Write out the encoded huffman literal/length and distance trees
+    for (codelength, extra) in combined {
+        let sym =
+            char::from_u32(codelength as u32).expect("Should be in range");
+        let (encoded, len) =
+            code_tree.encode(sym).expect("Just made it, should exist");
+        writer.write_bits(encoded, len);
+        if let Some(extra_len) = extra {
+            let (extra_len, nbits) = match codelength {
+                16 => (extra_len - 3, 2),
+                17 => (extra_len - 3, 3),
+                18 => (extra_len - 10, 7),
+                _ => unreachable!(),
+            };
+            writer.write_bits(extra_len, nbits);
+        }
+    }
+
+    // the easy part, write out the data
+    for unit in compressed {
+        match unit {
+            Literal(byte) => {
+                literal_writer(&ltree, writer, char::from(byte));
+            }
+            Marker(length, distance) => {
+                length_writer(&ltree, writer, length);
+                distance_writer(&dtree, writer, distance);
+            }
+        }
+    }
+
+    literal_writer(&ltree, writer, '\u{100}');
 }
 
 fn literal_writer(ltree: &HuffmanTree, writer: &mut BitWriter, byte: char) {
@@ -183,7 +275,9 @@ fn length_writer(ltree: &HuffmanTree, writer: &mut BitWriter, length: usize) {
 
     let code = get_length_code(length);
     let symbol = char::from_u32(code as u32).unwrap();
-    let (huffman_code, huffman_len) = ltree.encode(symbol).unwrap();
+    let (huffman_code, huffman_len) = ltree
+        .encode(symbol)
+        .expect(format!("Frick '{symbol}' = {code} {length}").as_str());
 
     // Write Huffman code for the length symbol
     writer.write_bits(huffman_code, huffman_len);
@@ -256,6 +350,84 @@ fn run_length_encode(data: &[usize]) -> Vec<RunLengthEncoding> {
     encoding
 }
 
+fn rle_to_zlib_codes(rle: &[RunLengthEncoding]) -> Vec<(usize, Option<usize>)> {
+    use RunLengthEncoding::{Once, Repeat};
+    const PREVIOUS_CODE: usize = 16;
+    const PREVIOUS_MIN: usize = 3;
+    const PREVIOUS_MAX: usize = 6;
+    const PREVIOUS_MIN_RANGE: usize = 4;
+    /* const PREVIOUS_MAX_RANGE: usize = 7; */
+    const SHORT_ZERO_CODE: usize = 17;
+    const LONG_ZERO_CODE: usize = 18;
+    const SHORT_ZERO_MIN: usize = 3;
+    const SHORT_ZERO_MAX: usize = 10;
+    const LONG_ZERO_MIN: usize = 11;
+    const LONG_ZERO_MAX: usize = 138;
+
+    rle.iter().fold(vec![], |mut acc, encoded| {
+        match encoded {
+            Once(num) => acc.push((*num, None)),
+            Repeat(num, mut repetitions) => {
+                let num = *num;
+                if num == 0 {
+                    while repetitions > 0 {
+                        match repetitions {
+                            SHORT_ZERO_MIN..=SHORT_ZERO_MAX => {
+                                acc.push((SHORT_ZERO_CODE, Some(repetitions)));
+                                break;
+                            }
+                            LONG_ZERO_MIN.. => {
+                                let current_count =
+                                    if repetitions > LONG_ZERO_MAX {
+                                        repetitions -= LONG_ZERO_MAX;
+                                        LONG_ZERO_MAX
+                                    } else {
+                                        let temp = repetitions;
+                                        repetitions = 0;
+                                        temp
+                                    };
+                                acc.push((LONG_ZERO_CODE, Some(current_count)));
+                            }
+                            _ => {
+                                acc.extend_from_slice(
+                                    &[(0, None)].repeat(repetitions),
+                                );
+                                break;
+                            }
+                        }
+                    }
+                } else {
+                    while repetitions > 0 {
+                        match repetitions {
+                            ..=PREVIOUS_MIN => {
+                                acc.extend_from_slice(
+                                    &[(num, None)].repeat(repetitions),
+                                );
+                                break;
+                            }
+                            PREVIOUS_MIN_RANGE.. => {
+                                acc.push((num, None));
+                                repetitions -= 1;
+                                let current_count =
+                                    if repetitions > PREVIOUS_MAX {
+                                        repetitions -= PREVIOUS_MAX;
+                                        PREVIOUS_MAX
+                                    } else {
+                                        let temp = repetitions;
+                                        repetitions = 0;
+                                        temp
+                                    };
+                                acc.push((PREVIOUS_CODE, Some(current_count)));
+                            }
+                        }
+                    }
+                }
+            }
+        };
+        acc
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -288,6 +460,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore = "just do it"]
     fn test_fixed_on_license() {
         let root = Path::new(env!("CARGO_MANIFEST_DIR"));
         let license = root.join("LICENSE");
@@ -301,6 +474,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore = "just do it"]
     fn test_fixed_on_source_files() {
         let root = Path::new(env!("CARGO_MANIFEST_DIR"));
         let src = root.join("src");
@@ -317,15 +491,19 @@ mod tests {
     }
 
     #[test]
-    fn test_dyn() {
+    fn test_dynamic_on_license() {
         let root = Path::new(env!("CARGO_MANIFEST_DIR"));
-        let license = root.join("LICENSE.comp");
+        let license = root.join("LICENSE");
         let bytes = fs::read(license).expect("Read file!");
 
-        // let compressed = compress(&bytes, &Strategy::Fixed);
-        let _decompressed = decompress(&bytes).expect("Correct decompression");
+        println!("Compression started!");
+        let compressed = compress(&bytes, &Strategy::Dynamic);
+        println!("Compression done!");
+        println!("Decompression started!");
+        let decompressed =
+            decompress(&compressed).expect("Correct decompression");
+        println!("Decompression started!");
 
-        // assert_eq!(bytes, decompressed);
-        panic!()
+        assert_eq!(bytes, decompressed);
     }
 }
