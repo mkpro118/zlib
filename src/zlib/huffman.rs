@@ -550,6 +550,20 @@ impl HuffmanTree {
     pub fn encodings(&self) -> Option<&HashMap<char, (usize, usize)>> {
         self.map.as_ref()
     }
+
+    pub fn max_code_len(&self) -> usize {
+        match &self.map {
+            Some(map) => map.values().map(|&(_, len)| len).max().unwrap_or(0),
+            None => Self::get_depth(&self.root),
+        }
+    }
+
+    fn get_depth(root: &HuffmanTreeNode) -> usize {
+        let left_depth = root.left.as_deref().map_or(0, Self::get_depth);
+        let right_depth = root.right.as_deref().map_or(0, Self::get_depth);
+
+        1 + left_depth.max(right_depth)
+    }
 }
 
 /// Returns the alphabet for the literal/length Huffman tree.
