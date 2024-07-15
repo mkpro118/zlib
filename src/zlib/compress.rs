@@ -140,14 +140,7 @@ fn compress_dynamic(writer: &mut BitWriter, data: &[u8]) {
     );
     ltree.assign();
     dtree.assign();
-    let mut v = ltree
-        .encodings()
-        .unwrap()
-        .iter()
-        .map(|(&x, _)| x as usize)
-        .collect::<Vec<_>>();
-    v.sort();
-    println!("{:?}", v);
+    let (ltree, dtree) = (ltree.to_canonical(), dtree.to_canonical());
 
     let ltree_encodings = ltree
         .encodings()
@@ -168,7 +161,7 @@ fn compress_dynamic(writer: &mut BitWriter, data: &[u8]) {
         .collect::<Vec<usize>>();
 
     let dtree_codelengths = ((0 as char)..=dtree_max_value)
-        .map(|c| ltree.encode(c).map_or(0, |(_, len)| len))
+        .map(|c| dtree.encode(c).map_or(0, |(_, len)| len))
         .collect::<Vec<usize>>();
 
     let ltree_run_length = run_length_encode(&ltree_codelengths);
@@ -184,6 +177,7 @@ fn compress_dynamic(writer: &mut BitWriter, data: &[u8]) {
 
     let mut code_tree = HuffmanTree::from_data(&codes_only);
     code_tree.assign();
+    let code_tree = code_tree.to_canonical();
 
     let cmax = code_tree.max_code_len();
     assert!(
@@ -208,14 +202,9 @@ fn compress_dynamic(writer: &mut BitWriter, data: &[u8]) {
     assert!(hcodes.len() >= 4, "Should be at least 4");
 
     // Now we have all the data to write out the header
-    let hlit = (ltree_max_value as usize) - 257;
-    println!("COMPRESSION hlit = {} {0:05b}", hlit);
-    let hdist = (dtree_max_value as usize) - 1;
-    println!("COMPRESSION hdist = {} {0:05b}", hdist);
+    let hlit = (ltree_codelengths.len()) - 257;
+    let hdist = (dtree_codelengths.len()) - 1;
     let hclen = (hcodes.len() as usize) - 4;
-    println!("COMPRESSION hclen = {} {0:04b}", hclen);
-
-    println!("COMPRESSION hcodes = {:?}", hcodes);
 
     writer.write_bits(hlit, 5);
     writer.write_bits(hdist, 5);
@@ -233,12 +222,13 @@ fn compress_dynamic(writer: &mut BitWriter, data: &[u8]) {
             char::from_u32(codelength as u32).expect("Should be in range");
         let (encoded, len) =
             code_tree.encode(sym).expect("Just made it, should exist");
+
         writer.write_bits(encoded, len);
         if let Some(extra_len) = extra {
             let (extra_len, nbits) = match codelength {
                 16 => (extra_len - 3, 2),
                 17 => (extra_len - 3, 3),
-                18 => (extra_len - 10, 7),
+                18 => (extra_len - 11, 7),
                 _ => unreachable!(),
             };
             writer.write_bits(extra_len, nbits);
@@ -460,7 +450,6 @@ mod tests {
     }
 
     #[test]
-    #[ignore = "just do it"]
     fn test_fixed_on_license() {
         let root = Path::new(env!("CARGO_MANIFEST_DIR"));
         let license = root.join("LICENSE");
@@ -474,7 +463,6 @@ mod tests {
     }
 
     #[test]
-    #[ignore = "just do it"]
     fn test_fixed_on_source_files() {
         let root = Path::new(env!("CARGO_MANIFEST_DIR"));
         let src = root.join("src");
@@ -496,14 +484,26 @@ mod tests {
         let license = root.join("LICENSE");
         let bytes = fs::read(license).expect("Read file!");
 
-        println!("Compression started!");
         let compressed = compress(&bytes, &Strategy::Dynamic);
-        println!("Compression done!");
-        println!("Decompression started!");
         let decompressed =
             decompress(&compressed).expect("Correct decompression");
-        println!("Decompression started!");
 
         assert_eq!(bytes, decompressed);
+    }
+
+    #[test]
+    fn test_dynamic_on_source_files() {
+        let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+        let src = root.join("src");
+
+        for file in walkdir(&src) {
+            let bytes = fs::read(file).expect("Read file!");
+
+            let compressed = compress(&bytes, &Strategy::Dynamic);
+            let decompressed =
+                decompress(&compressed).expect("Correct decompression");
+
+            assert_eq!(bytes, decompressed);
+        }
     }
 }
