@@ -100,7 +100,13 @@ impl Eq for FreqNode {}
 
 impl Ord for FreqNode {
     fn cmp(&self, other: &Self) -> Ordering {
-        other.0.cmp(&self.0)
+        let cmp = self.0.cmp(&other.0);
+        match cmp {
+            Ordering::Equal => {
+                self.1.symbol.unwrap().cmp(&other.1.symbol.unwrap())
+            }
+            _ => cmp,
+        }
     }
 }
 
