@@ -23,7 +23,7 @@ use crate::zlib::bitreader::BitReader;
 use crate::zlib::lz77::{LZ77Compressor, LZ77Unit};
 
 /// The order of code length codes used in Huffman tree construction.
-static CODE_LENGTH_CODES_ORDER: [usize; 19] = [
+pub static CODE_LENGTH_CODES_ORDER: [usize; 19] = [
     16, 17, 18, 0, 8, 7, 9, 6, 10, 5, 11, 4, 12, 3, 13, 2, 14, 1, 15,
 ];
 
@@ -100,11 +100,12 @@ impl Eq for FreqNode {}
 
 impl Ord for FreqNode {
     fn cmp(&self, other: &Self) -> Ordering {
-        let cmp = self.0.cmp(&other.0);
+        let cmp = other.0.cmp(&self.0);
         match cmp {
-            Ordering::Equal => {
-                self.1.symbol.unwrap().cmp(&other.1.symbol.unwrap())
-            }
+            Ordering::Equal => match (self.1.symbol, other.1.symbol) {
+                (Some(sym_self), Some(sym_other)) => sym_other.cmp(&sym_self),
+                _ => cmp,
+            },
             _ => cmp,
         }
     }
@@ -191,7 +192,7 @@ impl HuffmanTree {
         let mut sym_freq = [0usize; 286];
         let mut dist_freq = [0usize; 30];
 
-        let mut count_sym = |byte: usize| sym_freq[byte] += 1;
+        let mut count_sym = |byte| sym_freq[byte] += 1;
         let mut count_dist = |byte| dist_freq[byte] += 1;
 
         for unit in data {
@@ -199,8 +200,7 @@ impl HuffmanTree {
                 Literal(byte) => count_sym(*byte as usize),
                 Marker(length, distance) => {
                     assert!(*length >= 3, "Length too short!");
-                    let length = length - 3;
-                    let length_code = get_length_code(length);
+                    let length_code = get_length_code(*length);
                     let distance_code = get_distance_code(*distance);
 
                     count_sym(length_code);
@@ -208,6 +208,9 @@ impl HuffmanTree {
                 }
             }
         }
+
+        // Ensure terminating character is encoded
+        sym_freq[256] = 1.max(sym_freq[256]);
 
         // convert arrays to hashmaps
         let sym_freq = sym_freq.into_iter().enumerate().fold(
