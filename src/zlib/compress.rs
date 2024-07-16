@@ -30,6 +30,7 @@ pub enum Strategy {
     Raw,
 }
 
+#[cfg_attr(test, derive(PartialEq, Eq))]
 #[derive(Debug)]
 enum RunLengthEncoding {
     Once(usize),
@@ -477,6 +478,432 @@ fn zlib_rle_encode_nonzero(
                 };
                 acc.push((PREVIOUS_CODE, Some(current_count)));
             }
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_write_dynamic_header() {
+        use crate::zlib::bitreader::BitReader;
+        let (mut tree1, mut tree2) = (HuffmanTree::new(), HuffmanTree::new());
+
+        tree1.insert(0b11, 2, 'A');
+        tree1.insert(0b10, 2, 'B');
+        tree1.insert(0b01, 2, '\u{100}');
+        tree1.insert(0b001, 3, '\u{101}');
+        tree1.insert(0b0001, 4, '\u{102}');
+        tree1.assign();
+
+        tree2.insert(0b0, 1, 0 as char);
+        tree2.insert(0b10, 2, 1 as char);
+        tree2.assign();
+
+        let (tree1, tree2) = (tree1.to_canonical(), tree2.to_canonical());
+
+        let mut writer = BitWriter::new();
+
+        write_dynamic_header(&mut writer, &tree1, &tree2);
+
+        let res = writer.finish();
+        let mut reader = BitReader::new(&res);
+        let (mut ltree, mut dtree) = HuffmanTree::decode_trees(&mut reader);
+        ltree.assign();
+        dtree.assign();
+
+        // We know that the headers were correct
+        // if we can rebuild the same trees from the header
+        assert_eq!(ltree.encodings(), tree1.encodings());
+        assert_eq!(dtree.encodings(), tree2.encodings());
+    }
+
+    #[test]
+    fn test_write_compressed_data() {
+        let (mut tree1, mut tree2) = (HuffmanTree::new(), HuffmanTree::new());
+
+        tree1.insert(0b11, 2, 'A');
+        tree1.insert(0b10, 2, 'B');
+        tree1.insert(0b01, 2, '\u{100}');
+        tree1.insert(0b001, 3, '\u{101}');
+        tree1.insert(0b0001, 4, '\u{102}');
+        tree1.assign();
+
+        tree2.insert(0b0, 1, 0 as char);
+        tree2.insert(0b10, 2, 1 as char);
+        tree2.assign();
+
+        let compressed = vec![
+            Literal('A' as u8),
+            Literal('B' as u8),
+            Literal('B' as u8),
+            Literal('A' as u8),
+            Literal('A' as u8),
+            Marker(4, 1),
+            Literal('B' as u8),
+            Marker(3, 2),
+        ];
+
+        let mut writer = BitWriter::new();
+
+        write_compressed_data(&mut writer, &compressed, &tree1, &tree2);
+        let res = writer.finish();
+        let expected = vec![0b11_01_01_11u8, 0b1_0_1000_11u8, 0b10_01_100_0u8];
+
+        assert_eq!(res, expected);
+    }
+
+    #[test]
+    #[allow(clippy::unusual_byte_groupings)]
+    fn test_literal_writer() {
+        let mut tree = HuffmanTree::new();
+        tree.insert(0b0, 1, 'A');
+        tree.insert(0b10, 2, 'B');
+        tree.insert(0b110, 3, 'C');
+        tree.insert(0b111, 3, 'D');
+        tree.assign();
+
+        let mut writer = BitWriter::new();
+        for &sym in b"BADCADDAD" {
+            literal_writer(&tree, &mut writer, sym as char);
+        }
+
+        let res = writer.finish();
+        // The groupings are done to show the character encodings
+        let expected = vec![0b11_111_0_01u8, 0b111_111_0_0u8, 0b111_0u8];
+
+        assert_eq!(res, expected);
+    }
+
+    #[test]
+    #[allow(clippy::unusual_byte_groupings)]
+    fn test_length_writer() {
+        let mut tree = HuffmanTree::new();
+        tree.insert(0b0, 1, '\u{101}');
+        tree.insert(0b10, 2, '\u{104}');
+        tree.insert(0b110, 3, '\u{113}');
+        tree.insert(0b111, 3, '\u{11D}');
+        tree.assign();
+
+        let mut writer = BitWriter::new();
+        for sym in [3, 6, 54, 258] {
+            length_writer(&tree, &mut writer, sym);
+        }
+
+        let res = writer.finish();
+        // The groupings are done to show the character encodings
+        let expected = vec![0b11_011_01_0u8, 0b111_0u8];
+
+        assert_eq!(res, expected);
+    }
+
+    #[test]
+    #[allow(clippy::unusual_byte_groupings)]
+    fn test_distance_writer() {
+        let mut tree = HuffmanTree::new();
+        tree.insert(0b0, 1, 0 as char);
+        tree.insert(0b10, 2, 5 as char);
+        tree.insert(0b110, 3, 17 as char);
+        tree.insert(0b111, 3, 20 as char);
+        tree.assign();
+
+        let mut writer = BitWriter::new();
+        for sym in [1, 8, 454, 1035] {
+            distance_writer(&tree, &mut writer, sym);
+        }
+
+        let res = writer.finish();
+        // The groupings are done to show the character encodings
+        let expected =
+            vec![0b1_011_1_01_0u8, 0b11_100010u8, 0b0001010_1u8, 0b_0u8];
+
+        assert_eq!(res, expected);
+    }
+
+    #[test]
+    fn test_get_codelengths() {
+        let (mut tree1, mut tree2) = (HuffmanTree::new(), HuffmanTree::new());
+        for tree in [&mut tree1, &mut tree2] {
+            tree.insert(0b0, 1, 0 as char);
+            tree.insert(0b10, 2, 1 as char);
+            tree.insert(0b110, 3, 2 as char);
+            tree.insert(0b111, 3, 3 as char);
+            tree.assign();
+        }
+
+        let (cl1, cl2) = get_codelengths(&tree1, &tree2);
+        let expected1 = [vec![1, 2, 3, 3], vec![0; 254]].concat();
+        let expected2 = vec![1, 2, 3, 3];
+        assert_eq!(cl1, expected1);
+        assert_eq!(cl2, expected2);
+    }
+
+    #[test]
+    fn test_get_code_tree() {
+        let combined = [
+            vec![
+                (17, Some(4)),
+                (2, None),
+                (2, None),
+                (2, None),
+                (11, None),
+                (16, Some(6)),
+            ],
+            vec![
+                (1, None),
+                (16, Some(3)),
+                (7, None),
+                (16, Some(6)),
+                (7, None),
+                (16, Some(3)),
+            ],
+        ]
+        .concat();
+
+        let code_tree = get_code_tree(&combined);
+
+        // TC 1, these symbols should exist
+        {
+            let syms: [u8; 6] = [1, 2, 7, 11, 16, 17];
+            for sym in syms.map(char::from) {
+                assert!(code_tree.encode(sym).is_some());
+            }
+        }
+
+        // TC 2, these symbols should not exist
+        {
+            let syms: [u8; 12] = [3, 4, 5, 6, 8, 9, 10, 12, 13, 14, 15, 18];
+            for sym in syms.map(char::from) {
+                assert!(code_tree.encode(sym).is_none());
+            }
+        }
+    }
+
+    #[test]
+    fn test_get_hcodes() {
+        // TC 1
+        {
+            let mut code_tree = HuffmanTree::new();
+            code_tree.insert(0b0, 1, 17 as char);
+            code_tree.insert(0b10, 2, 4 as char);
+            code_tree.insert(0b110, 3, 16 as char);
+            code_tree.insert(0b111, 3, 15 as char);
+            code_tree.assign();
+
+            // 16 and 17 are the first two indices in CODE_LENGTH_CODES_ORDER.
+            // Index of 4 is 11, So skip 9 elements (2..=10)
+            // Index of 15 is 18, So skip 6 elements (12..=17)
+            let expected =
+                [vec![3, 1], vec![0; 9], vec![2], vec![0; 6], vec![3]].concat();
+
+            let hcodes = get_hcodes(&code_tree);
+            assert_eq!(hcodes, expected);
+        }
+
+        // TC 2, ensure trailing zeros are removed
+        {
+            let mut code_tree = HuffmanTree::new();
+            code_tree.insert(0b0, 1, 16 as char);
+            code_tree.insert(0b10, 2, 4 as char);
+            code_tree.insert(0b110, 3, 17 as char);
+            code_tree.insert(0b111, 3, 18 as char);
+            code_tree.assign();
+
+            // 16 17 and 18 are the first three indices.
+            // Index of 4 is 11, So skip 8 elements (2..=10)
+            let expected = [vec![1, 3, 3], vec![0; 8], vec![2]].concat();
+
+            let hcodes = get_hcodes(&code_tree);
+            assert_eq!(hcodes, expected);
+        }
+    }
+
+    #[test]
+    fn test_get_zlib_compressor() {
+        let compressor = get_zlib_compressor();
+        assert_eq!(compressor.window_size, ZLIB_WINDOW_SIZE);
+        assert_eq!(compressor.min_match_length, ZLIB_MIN_STRING_LENGTH);
+        assert_eq!(compressor.max_match_length, ZLIB_MAX_STRING_LENGTH);
+    }
+
+    #[test]
+    fn test_zlib_rle() {
+        let data = [(
+            [[0].repeat(4), [2].repeat(3), [11].repeat(7)].concat(),
+            [[1].repeat(4), [7].repeat(11)].concat(),
+            [
+                vec![
+                    (17, Some(4)),
+                    (2, None),
+                    (2, None),
+                    (2, None),
+                    (11, None),
+                    (16, Some(6)),
+                ],
+                vec![
+                    (1, None),
+                    (16, Some(3)),
+                    (7, None),
+                    (16, Some(6)),
+                    (7, None),
+                    (16, Some(3)),
+                ],
+            ]
+            .concat(),
+        )];
+
+        for (cl1, cl2, expected) in data {
+            let actual = zlib_rle(&cl1, &cl2);
+            assert_eq!(actual, expected);
+        }
+    }
+
+    #[test]
+    fn test_run_length_encode() {
+        let data = [
+            (
+                [[1].repeat(6), [2].repeat(3), vec![0], [5].repeat(12)]
+                    .concat(),
+                vec![Repeat(1, 6), Repeat(2, 3), Once(0), Repeat(5, 12)],
+            ),
+            (
+                [[1].repeat(106), [122].repeat(23), vec![0; 5], [5].repeat(6)]
+                    .concat(),
+                vec![
+                    Repeat(1, 106),
+                    Repeat(122, 23),
+                    Repeat(0, 5),
+                    Repeat(5, 6),
+                ],
+            ),
+            (
+                vec![1, 2, 3, 4, 5],
+                vec![Once(1), Once(2), Once(3), Once(4), Once(5)],
+            ),
+        ];
+
+        for (input, expected) in data {
+            let output = run_length_encode(&input);
+            assert_eq!(output, expected);
+        }
+    }
+
+    #[test]
+    fn test_rle_to_zlib_codes() {
+        let data = [
+            (
+                vec![Repeat(1, 6), Repeat(2, 3), Once(0), Repeat(5, 12)],
+                vec![
+                    (1, None),
+                    (16, Some(5)),
+                    (2, None),
+                    (2, None),
+                    (2, None),
+                    (0, None),
+                    (5, None),
+                    (16, Some(6)),
+                    (5, None),
+                    (16, Some(4)),
+                ],
+            ),
+            (
+                vec![
+                    Repeat(0, 106),
+                    Repeat(12, 7),
+                    Repeat(0, 10),
+                    Repeat(0, 11),
+                ],
+                vec![
+                    (18, Some(106)),
+                    (12, None),
+                    (16, Some(6)),
+                    (17, Some(10)),
+                    (18, Some(11)),
+                ],
+            ),
+            (
+                vec![Once(1), Once(2), Once(3), Once(4), Once(5)],
+                vec![(1, None), (2, None), (3, None), (4, None), (5, None)],
+            ),
+            (
+                vec![Repeat(1, 2), Repeat(0, 2), Repeat(3, 2)],
+                vec![
+                    (1, None),
+                    (1, None),
+                    (0, None),
+                    (0, None),
+                    (3, None),
+                    (3, None),
+                ],
+            ),
+            (vec![Repeat(0, 139)], vec![(18, Some(138)), (0, None)]),
+        ];
+
+        for (input, expected) in data {
+            let output = rle_to_zlib_codes(&input);
+            assert_eq!(output, expected);
+        }
+    }
+
+    #[test]
+    fn test_zlib_rle_encode_zero() {
+        let data = [
+            (0, vec![]),
+            (1, vec![(0, None)]),
+            (2, vec![(0, None), (0, None)]),
+            (3, vec![(17, Some(3))]),
+            (4, vec![(17, Some(4))]),
+            (10, vec![(17, Some(10))]),
+            (11, vec![(18, Some(11))]),
+            (12, vec![(18, Some(12))]),
+            (137, vec![(18, Some(137))]),
+            (138, vec![(18, Some(138))]),
+            (139, vec![(18, Some(138)), (0, None)]),
+            (200, vec![(18, Some(138)), (18, Some(62))]),
+        ];
+
+        for (repetitions, expected) in data {
+            let mut acc = vec![];
+            zlib_rle_encode_zero(&mut acc, repetitions);
+            assert_eq!(acc, expected);
+        }
+    }
+
+    #[test]
+    fn test_zlib_rle_encode_nonzero() {
+        let data = [
+            (0, 0, vec![]),
+            (1, 1, vec![(1, None)]),
+            (2, 2, vec![(2, None), (2, None)]),
+            (3, 3, vec![(3, None), (3, None), (3, None)]),
+            (4, 4, vec![(4, None), (16, Some(3))]),
+            (5, 5, vec![(5, None), (16, Some(4))]),
+            (7, 7, vec![(7, None), (16, Some(6))]),
+            (8, 8, vec![(8, None), (16, Some(6)), (8, None)]),
+            (
+                11,
+                11,
+                vec![(11, None), (16, Some(6)), (11, None), (16, Some(3))],
+            ),
+            (
+                15,
+                15,
+                vec![
+                    (15, None),
+                    (16, Some(6)),
+                    (15, None),
+                    (16, Some(6)),
+                    (15, None),
+                ],
+            ),
+        ];
+
+        for (num, repetitions, expected) in data {
+            let mut acc = vec![];
+            zlib_rle_encode_nonzero(&mut acc, num, repetitions);
+            assert_eq!(acc, expected);
         }
     }
 }
