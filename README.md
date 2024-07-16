@@ -3,7 +3,7 @@
 </h1>
 
 <p align="center">
-  <img alt="Rust 1.68" src="https://img.shields.io/badge/1.68-grey?style=flat&logo=rust&logoColor=orange&color=%232A2A2A">
+  <img alt="Rust 1.79" src="https://img.shields.io/badge/1.68-grey?style=flat&logo=rust&logoColor=orange&color=%232A2A2A">
 
   <a href="https://github.com/mkpro118/zlib/actions/workflows/tests.yml">
     <img alt="Tests" src="https://github.com/mkpro118/zlib/actions/workflows/tests.yml/badge.svg">
