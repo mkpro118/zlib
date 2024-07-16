@@ -1,12 +1,12 @@
 [package]
-name = "mini_git"
+name = "zlib"
 version = "0.1.0"
 edition = "2021"
 rust-version = "1.79"
-description = "A smaller re-implementation of the Git VCS"
+description = "A smaller re-implementation of Zlib compression and decompression"
 authors = ["M K <mkpro118@gmail.com>"]
 license = "MIT"
-repository = "https://github.com/mkpro118/doc-buildr"
+# repository = "https://github.com/mkpro118/doc-buildr"
 readme = "README.md"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
