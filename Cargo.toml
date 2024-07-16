@@ -6,7 +6,7 @@ rust-version = "1.79"
 description = "A smaller re-implementation of Zlib compression and decompression"
 authors = ["M K <mkpro118@gmail.com>"]
 license = "MIT"
-# repository = "https://github.com/mkpro118/doc-buildr"
+repository = "https://github.com/mkpro118/zlib"
 readme = "README.md"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
