@@ -7,7 +7,7 @@
 //! # Examples
 //!
 //! ```
-//! use mini_git::zlib::lz77::LZ77Compressor;
+//! use zlib::lz77::LZ77Compressor;
 //!
 //! let mut compressor = LZ77Compressor::new();
 //! let data = b"ABC BC BC BC BC CD";
@@ -43,7 +43,7 @@ impl Default for LZ77Compressor {
     /// # Examples
     ///
     /// ```
-    /// use mini_git::zlib::lz77::LZ77Compressor;
+    /// use zlib::lz77::LZ77Compressor;
     ///
     /// let compressor = LZ77Compressor::default();
     /// dbg!(&compressor);
@@ -63,7 +63,7 @@ impl LZ77Compressor {
     /// # Examples
     ///
     /// ```
-    /// use mini_git::zlib::lz77::LZ77Compressor;
+    /// use zlib::lz77::LZ77Compressor;
     ///
     /// let compressor = LZ77Compressor::new();
     /// ```
@@ -81,7 +81,7 @@ impl LZ77Compressor {
     /// # Examples
     ///
     /// ```
-    /// use mini_git::zlib::lz77::LZ77Compressor;
+    /// use zlib::lz77::LZ77Compressor;
     ///
     /// let compressor = LZ77Compressor::with_window_size(1024);
     /// assert_eq!(compressor.window_size, 1024);
@@ -108,7 +108,7 @@ impl LZ77Compressor {
     /// # Examples
     ///
     /// ```
-    /// use mini_git::zlib::lz77::LZ77Compressor;
+    /// use zlib::lz77::LZ77Compressor;
     ///
     /// let mut compressor = LZ77Compressor::new();
     /// compressor.set_window_size(2048);
@@ -132,7 +132,7 @@ impl LZ77Compressor {
     /// # Examples
     ///
     /// ```
-    /// use mini_git::zlib::lz77::LZ77Compressor;
+    /// use zlib::lz77::LZ77Compressor;
     ///
     /// let compressor = LZ77Compressor::new();
     /// let data = b"ABCBDBDBDBDBDBDBCBADBSB";

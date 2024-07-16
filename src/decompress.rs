@@ -1,9 +1,9 @@
 //! This module provides functionality for decompressing DEFLATE-compressed data.
 //! Inspired from: [this article](https://pyokagan.name/blog/2019-10-18-zlibinflate/)
 
-use crate::zlib::adler::adler32;
-use crate::zlib::bitreader::BitReader;
-use crate::zlib::huffman::{
+use crate::adler::adler32;
+use crate::bitreader::BitReader;
+use crate::huffman::{
     HuffmanTree, DISTANCE_BASE, DISTANCE_EXTRA_BITS, LENGTH_BASE,
     LENGTH_EXTRA_BITS,
 };
@@ -15,7 +15,7 @@ use crate::zlib::huffman::{
 /// # Examples
 ///
 /// ```
-/// use mini_git::zlib::decompress;
+/// use zlib::decompress;
 ///
 /// let compressed_data = vec![0x78, 0x9C, 0x4B, 0xCE, 0xCF, 0x2D, 0x28, 0x4A,
 ///     0x2D, 0x2E, 0x4E, 0x4D, 0x01, 0x00, 0x17, 0x3F, 0x04, 0x36];
@@ -191,7 +191,7 @@ fn inflate_block_data(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::zlib::bitreader::code_to_bytes;
+    use crate::bitreader::code_to_bytes;
 
     #[test]
     fn test_decompress_invalid_cm() {

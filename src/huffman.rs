@@ -6,7 +6,7 @@
 //! # Examples
 //!
 //! ```
-//! use mini_git::zlib::huffman::{HuffmanTree, literal_length_tree_alphabet};
+//! use zlib::huffman::{HuffmanTree, literal_length_tree_alphabet};
 //!
 //! let bitlen = vec![2, 1, 3, 3];
 //! let alphabet = vec!['A', 'B', 'C', 'D'];
@@ -18,9 +18,9 @@
 use core::cmp::Ordering;
 use std::collections::{BinaryHeap, HashMap, VecDeque};
 
-use crate::zlib::bitreader::BitReader;
+use crate::bitreader::BitReader;
 
-use crate::zlib::lz77::{LZ77Compressor, LZ77Unit};
+use crate::lz77::{LZ77Compressor, LZ77Unit};
 
 /// The order of code length codes used in Huffman tree construction.
 pub static CODE_LENGTH_CODES_ORDER: [usize; 19] = [
@@ -131,7 +131,7 @@ impl HuffmanTree {
     /// # Examples
     ///
     /// ```
-    /// use mini_git::zlib::huffman::HuffmanTree;
+    /// use zlib::huffman::HuffmanTree;
     ///
     /// let tree = HuffmanTree::new();
     /// ```
@@ -148,7 +148,7 @@ impl HuffmanTree {
     /// # Examples
     ///
     /// ```
-    /// use mini_git::zlib::huffman::HuffmanTree;
+    /// use zlib::huffman::HuffmanTree;
     ///
     /// let data = b"hello world";
     /// let tree = HuffmanTree::from_data(data);
@@ -170,7 +170,7 @@ impl HuffmanTree {
     ///
     /// ```
     /// use std::collections::HashMap;
-    /// use mini_git::zlib::huffman::HuffmanTree;
+    /// use zlib::huffman::HuffmanTree;
     ///
     /// let mut frequencies = HashMap::new();
     /// frequencies.insert('a', 3);
@@ -218,7 +218,7 @@ impl HuffmanTree {
     /// # Examples
     ///
     /// ```
-    /// use mini_git::zlib::{huffman::*, lz77::LZ77Compressor};
+    /// use zlib::{huffman::*, lz77::LZ77Compressor};
     ///
     /// let data = b"abc".repeat(100);
     ///
@@ -299,7 +299,7 @@ impl HuffmanTree {
     /// # Examples
     ///
     /// ```
-    /// use mini_git::zlib::huffman::HuffmanTree;
+    /// use zlib::huffman::HuffmanTree;
     ///
     /// let bitlen = &[2, 1, 3, 3];
     /// let alphabet = &['A', 'B', 'C', 'D'];
@@ -343,7 +343,7 @@ impl HuffmanTree {
     /// # Examples
     ///
     /// ```
-    /// use mini_git::zlib::huffman::HuffmanTree;
+    /// use zlib::huffman::HuffmanTree;
     ///
     /// let (lit_tree, dist_tree) = HuffmanTree::get_zlib_fixed();
     /// ```
@@ -369,7 +369,7 @@ impl HuffmanTree {
     /// # Examples
     ///
     /// ```
-    /// use mini_git::zlib::huffman::HuffmanTree;
+    /// use zlib::huffman::HuffmanTree;
     ///
     /// let tree = HuffmanTree::new();
     /// let n_codes = tree.n_codes();
@@ -396,7 +396,7 @@ impl HuffmanTree {
     /// # Examples
     ///
     /// ```
-    /// use mini_git::zlib::huffman::HuffmanTree;
+    /// use zlib::huffman::HuffmanTree;
     ///
     /// let mut tree = HuffmanTree::new();
     /// tree.insert(0b1, 1, 'A');
@@ -451,8 +451,8 @@ impl HuffmanTree {
     /// # Examples
     ///
     /// ```
-    /// use mini_git::zlib::huffman::HuffmanTree;
-    /// use mini_git::zlib::bitreader::{BitReader, code_to_bytes};
+    /// use zlib::huffman::HuffmanTree;
+    /// use zlib::bitreader::{BitReader, code_to_bytes};
     ///
     /// let mut tree = HuffmanTree::new();
     /// tree.insert(0b1, 1, 'A');
@@ -507,8 +507,8 @@ impl HuffmanTree {
     /// # Examples
     ///
     /// ```no_run
-    /// use mini_git::zlib::huffman::HuffmanTree;
-    /// use mini_git::zlib::bitreader::BitReader;
+    /// use zlib::huffman::HuffmanTree;
+    /// use zlib::bitreader::BitReader;
     ///
     /// // Example bit sequence, this is not enough to decode trees
     /// let bytes = [0b10101010, 0b01010101];
@@ -600,7 +600,7 @@ impl HuffmanTree {
     /// # Examples
     ///
     /// ```
-    /// use mini_git::zlib::huffman::HuffmanTree;
+    /// use zlib::huffman::HuffmanTree;
     ///
     /// let data = b"abc".repeat(5);
     ///
@@ -650,7 +650,7 @@ impl HuffmanTree {
     ///
     /// ```
     /// // Setup is the same as HuffmanTree::assign
-    /// # use mini_git::zlib::huffman::HuffmanTree;
+    /// # use zlib::huffman::HuffmanTree;
     /// #
     /// # let data = b"abc".repeat(5);
     /// #
@@ -672,7 +672,7 @@ impl HuffmanTree {
     /// # Examples
     ///
     /// ```
-    /// use mini_git::zlib::huffman::HuffmanTree;
+    /// use zlib::huffman::HuffmanTree;
     /// let tree = HuffmanTree::new();
     ///
     /// // Add some nodes to the tree and assign codes
@@ -700,7 +700,7 @@ impl HuffmanTree {
     /// # Examples
     ///
     /// ```
-    /// use mini_git::zlib::huffman::HuffmanTree;
+    /// use zlib::huffman::HuffmanTree;
     /// let mut tree = HuffmanTree::new();
     /// // Add some nodes to the tree and assign codes
     ///
@@ -736,7 +736,7 @@ impl HuffmanTree {
     /// # Examples
     ///
     /// ```
-    /// use mini_git::zlib::huffman::HuffmanTree;
+    /// use zlib::huffman::HuffmanTree;
     /// let tree = HuffmanTree::new();
     /// // Add some nodes to the tree
     /// let max_len = tree.max_code_len();
@@ -772,7 +772,7 @@ impl HuffmanTree {
 /// # Examples
 ///
 /// ```
-/// use mini_git::zlib::huffman::literal_length_tree_alphabet;
+/// use zlib::huffman::literal_length_tree_alphabet;
 ///
 /// let alphabet = literal_length_tree_alphabet();
 /// assert_eq!(alphabet.len(), 286);
@@ -795,7 +795,7 @@ pub fn literal_length_tree_alphabet() -> Vec<char> {
 /// # Examples
 ///
 /// ```
-/// use mini_git::zlib::huffman::distance_tree_alphabet;
+/// use zlib::huffman::distance_tree_alphabet;
 ///
 /// let alphabet = distance_tree_alphabet();
 /// assert_eq!(alphabet.len(), 30);
@@ -837,7 +837,7 @@ fn check_lz77(lz77: &LZ77Compressor) {
 /// # Examples
 ///
 /// ```
-/// use mini_git::zlib::huffman::get_length_code;
+/// use zlib::huffman::get_length_code;
 /// let length = 10;
 /// let length_code = get_length_code(length);
 /// assert_eq!(257 + 7, length_code); // Values are offset by 257
@@ -855,7 +855,7 @@ pub fn get_length_code(length: usize) -> usize {
 /// # Examples
 ///
 /// ```
-/// use mini_git::zlib::huffman::get_distance_code;
+/// use zlib::huffman::get_distance_code;
 /// let distance = 100;
 /// let distance_code = get_distance_code(distance);
 /// assert_eq!(13, distance_code);
@@ -871,7 +871,7 @@ pub fn get_distance_code(distance: usize) -> usize {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::zlib::bitreader::code_to_bytes;
+    use crate::bitreader::code_to_bytes;
 
     #[test]
     fn test_huffman_tree_node_new() {

@@ -6,7 +6,7 @@
 /// # Examples
 ///
 /// ```
-/// use mini_git::zlib::bitreader::BitReader;
+/// use zlib::bitreader::BitReader;
 ///
 /// let mut reader = BitReader::new(b"\x9d");
 ///
@@ -28,7 +28,7 @@ impl<'a> BitReader<'a> {
     /// # Examples
     ///
     /// ```
-    /// use mini_git::zlib::bitreader::BitReader;
+    /// use zlib::bitreader::BitReader;
     ///
     /// let data = vec![0xA5, 0x3C];
     /// let reader = BitReader::new(&data);
@@ -48,7 +48,7 @@ impl<'a> BitReader<'a> {
     /// # Examples
     ///
     /// ```
-    /// use mini_git::zlib::bitreader::BitReader;
+    /// use zlib::bitreader::BitReader;
     ///
     /// let data = vec![0xA5, 0x3C];
     /// let mut reader = BitReader::new(&data);
@@ -68,7 +68,7 @@ impl<'a> BitReader<'a> {
     /// # Examples
     ///
     /// ```
-    /// use mini_git::zlib::bitreader::BitReader;
+    /// use zlib::bitreader::BitReader;
     ///
     /// let data = vec![0b10110001];
     /// let mut reader = BitReader::new(&data);
@@ -96,7 +96,7 @@ impl<'a> BitReader<'a> {
     /// # Examples
     ///
     /// ```
-    /// use mini_git::zlib::bitreader::BitReader;
+    /// use zlib::bitreader::BitReader;
     ///
     /// let data = vec![0b10110001];
     /// let mut reader = BitReader::new(&data);
@@ -119,7 +119,7 @@ impl<'a> BitReader<'a> {
     /// # Examples
     ///
     /// ```
-    /// use mini_git::zlib::bitreader::BitReader;
+    /// use zlib::bitreader::BitReader;
     ///
     /// let data = vec![0x12, 0x34, 0x56, 0x78];
     /// let mut reader = BitReader::new(&data);
@@ -145,7 +145,7 @@ impl<'a> BitReader<'a> {
 /// # Examples
 ///
 /// ```
-/// use mini_git::zlib::bitreader::code_to_bytes;
+/// use zlib::bitreader::code_to_bytes;
 ///
 /// let code = 0b110;
 /// let length = 3;

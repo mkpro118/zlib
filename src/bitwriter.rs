@@ -5,7 +5,7 @@
 /// # Examples
 ///
 /// ```
-/// use mini_git::zlib::bitwriter::BitWriter;
+/// use zlib::bitwriter::BitWriter;
 ///
 /// let mut writer = BitWriter::new();
 /// writer.write_bits(0b110, 3);
@@ -35,7 +35,7 @@ impl BitWriter {
     /// # Examples
     ///
     /// ```
-    /// use mini_git::zlib::bitwriter::BitWriter;
+    /// use zlib::bitwriter::BitWriter;
     ///
     /// let writer = BitWriter::new();
     /// ```
@@ -53,7 +53,7 @@ impl BitWriter {
     /// # Examples
     ///
     /// ```
-    /// use mini_git::zlib::bitwriter::BitWriter;
+    /// use zlib::bitwriter::BitWriter;
     ///
     /// let mut writer = BitWriter::new();
     /// writer.write_bit(1);
@@ -77,7 +77,7 @@ impl BitWriter {
     /// # Examples
     ///
     /// ```
-    /// use mini_git::zlib::bitwriter::BitWriter;
+    /// use zlib::bitwriter::BitWriter;
     ///
     /// let mut writer = BitWriter::new();
     /// writer.write_bits(0b110, 3);
@@ -102,7 +102,7 @@ impl BitWriter {
     /// # Examples
     ///
     /// ```
-    /// use mini_git::zlib::bitwriter::BitWriter;
+    /// use zlib::bitwriter::BitWriter;
     ///
     /// let mut writer = BitWriter::new();
     /// writer.write_byte(0xA5);
@@ -123,7 +123,7 @@ impl BitWriter {
     /// # Examples
     ///
     /// ```
-    /// use mini_git::zlib::bitwriter::BitWriter;
+    /// use zlib::bitwriter::BitWriter;
     ///
     /// let mut writer = BitWriter::new();
     /// writer.write_bytes(&[0xA5, 0x3C, 0x7F]);
@@ -150,7 +150,7 @@ impl BitWriter {
     /// # Examples
     ///
     /// ```
-    /// use mini_git::zlib::bitwriter::BitWriter;
+    /// use zlib::bitwriter::BitWriter;
     ///
     /// let mut writer = BitWriter::new();
     /// writer.write_bits(0b101, 3);
@@ -173,7 +173,7 @@ impl BitWriter {
     /// # Examples
     ///
     /// ```
-    /// use mini_git::zlib::bitwriter::BitWriter;
+    /// use zlib::bitwriter::BitWriter;
     ///
     /// let mut writer = BitWriter::new();
     /// writer.write_bits(0b1101, 4);
