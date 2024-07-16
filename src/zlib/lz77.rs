@@ -221,7 +221,7 @@ mod tests {
 
         let compressor = LZ77Compressor::default();
         for raw_data in data {
-            let compressed = compressor.compress(&raw_data);
+            let compressed = compressor.compress(raw_data);
             assert!(raw_data.len() > compressed.len());
         }
     }
@@ -236,7 +236,7 @@ mod tests {
 
         let compressor = LZ77Compressor::new();
         for raw_data in data {
-            let compressed = compressor.compress(&raw_data);
+            let compressed = compressor.compress(raw_data);
             assert_eq!(raw_data.len(), compressed.len());
             raw_data
                 .iter()
