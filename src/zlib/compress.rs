@@ -537,13 +537,13 @@ mod tests {
         tree2.assign();
 
         let compressed = vec![
-            Literal('A' as u8),
-            Literal('B' as u8),
-            Literal('B' as u8),
-            Literal('A' as u8),
-            Literal('A' as u8),
+            Literal(b'A'),
+            Literal(b'B'),
+            Literal(b'B'),
+            Literal(b'A'),
+            Literal(b'A'),
             Marker(4, 1),
-            Literal('B' as u8),
+            Literal(b'B'),
             Marker(3, 2),
         ];
 
