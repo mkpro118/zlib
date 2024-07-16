@@ -10,12 +10,11 @@ mod tests {
         assert!(top.is_dir(), "Top is not a directory (top = {top:?})");
         top.read_dir()
             .expect("Should read the dir")
-            .filter(|e| e.is_ok())
-            .map(|e| e.unwrap())
+            .flatten()
             .map(|e| e.path())
             .filter(|path| {
                 path.file_stem().is_some_and(|stem| {
-                    !stem.to_str().is_some_and(|x| x.starts_with("."))
+                    !stem.to_str().is_some_and(|x| x.starts_with('.'))
                 })
             })
             .fold(vec![], |mut paths, entry| {
