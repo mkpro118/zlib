@@ -1,7 +1,5 @@
 //! This module provides a `BitWriter` struct for writing bits to a byte vector.
 
-#![allow(dead_code)]
-
 /// A struct for writing individual bits or groups of bits to a byte vector.
 ///
 /// # Examples
