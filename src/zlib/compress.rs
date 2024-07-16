@@ -521,6 +521,7 @@ mod tests {
     }
 
     #[test]
+    #[allow(clippy::unusual_byte_groupings)]
     fn test_write_compressed_data() {
         let (mut tree1, mut tree2) = (HuffmanTree::new(), HuffmanTree::new());
 

@@ -1025,6 +1025,7 @@ mod tests {
     }
 
     #[test]
+    #[allow(clippy::unusual_byte_groupings)]
     fn test_huffman_tree_decode_good() {
         let mut tree = HuffmanTree::new();
         tree.insert(0b1, 1, 'B');
@@ -1067,6 +1068,7 @@ mod tests {
     }
 
     #[test]
+    #[allow(clippy::unusual_byte_groupings)]
     fn test_huffman_tree_decode_bad() {
         let mut tree = HuffmanTree::new();
         tree.insert(0b1, 1, 'B');
@@ -1104,6 +1106,7 @@ mod tests {
     }
 
     #[test]
+    #[allow(clippy::unusual_byte_groupings)]
     fn test_huffman_tree_from_bitlen_list() {
         let tree =
             HuffmanTree::from_bitlen_list(&[2, 1, 3, 3], &['A', 'B', 'C', 'D']);

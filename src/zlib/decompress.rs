@@ -370,6 +370,7 @@ mod tests {
     }
 
     #[test]
+    #[allow(clippy::unusual_byte_groupings)]
     fn test_inflate_block_data_literals() {
         let mut literal_tree = HuffmanTree::new();
         let distance_tree = HuffmanTree::new();
@@ -398,6 +399,7 @@ mod tests {
     }
 
     #[test]
+    #[allow(clippy::unusual_byte_groupings)]
     fn test_inflate_block_data_distance() {
         let mut literal_tree = HuffmanTree::new();
         let mut distance_tree = HuffmanTree::new();
