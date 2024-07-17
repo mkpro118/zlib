@@ -106,6 +106,8 @@ impl Ord for FreqNode {
         match cmp {
             Ordering::Equal => match (self.1.symbol, other.1.symbol) {
                 (Some(sym_self), Some(sym_other)) => sym_other.cmp(&sym_self),
+                (Some(_), None) => Ordering::Greater,
+                (None, Some(_)) => Ordering::Less,
                 _ => cmp,
             },
             _ => cmp,
