@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use crate::adler::adler32;
 use crate::bitwriter::BitWriter;
 use crate::huffman::{
@@ -8,7 +10,8 @@ use crate::huffman::{
 use crate::lz77::{LZ77Compressor, LZ77Unit};
 use LZ77Unit::{Literal, Marker};
 
-const SIXTEEN_KB: usize = 16 * 1024;
+const ONE_KB: usize = 1024;
+const SIXTEEN_KB: usize = 16 * ONE_KB;
 
 const PREVIOUS_CODE: usize = 16;
 const PREVIOUS_MIN: usize = 3;
@@ -72,7 +75,7 @@ pub fn compress(data: &[u8], strategy: &Strategy) -> Vec<u8> {
         Dynamic => compress_dynamic(&mut bitwriter, data),
         Fixed => compress_fixed(&mut bitwriter, data),
         Raw => compress_raw(&mut bitwriter, data),
-        Auto => {}
+        Auto => auto_compress(&mut bitwriter, data),
     };
 
     // Checksum
@@ -80,6 +83,89 @@ pub fn compress(data: &[u8], strategy: &Strategy) -> Vec<u8> {
     bitwriter.write_bytes(&checksum);
 
     bitwriter.finish()
+}
+
+#[allow(clippy::cast_precision_loss, clippy::cast_lossless)]
+fn auto_compress(writer: &mut BitWriter, data: &[u8]) {
+    // For data lesser 256 bytes the overhead is just not worth it
+    if data.len() < 256 {
+        return compress_raw(writer, data);
+    }
+
+    // For data lesser than 1 KB, the overhead of storing dynamic codes is not
+    // worth it
+    if data.len() < ONE_KB {
+        return compress_fixed(writer, data);
+    }
+
+    // For data larger than 1 KB,
+    // We sample the first 1KB and and choose based on the following heuristic,
+    // Create a frequency map of the first kb, using this map,
+    // 1. Calculate entropy of the sample, if the entropy is within 25% of
+    //    log2(alphabet_size), prefer fixed encoding. (weight: 0.5 * proximity)
+    // 2. If the top 5 symbols in the alphabet account for > 50% of the data,
+    //    prefer dynamic encoding. (weight: -0.5 * %of the alphabet the top 5 account for)
+    // 3. If the sum of the above two heuristics is within -0.1 < 0.1,
+    //    Estimated compression ratio
+    //      = unique_chars * log2(data_size) / data_size
+    //    If ratio < 0.5, we use dynamic encoding
+    //
+    // Note: These heuristics were chosed arbitrarily, I do not have any
+    //       evidence that they are optimal.
+
+    let mut preference: f64 = 0.;
+
+    let freq = data[..ONE_KB]
+        .iter()
+        .fold(HashMap::new(), |mut map, &byte| {
+            *map.entry(byte).or_insert(0) += 1u32;
+            map
+        });
+
+    // Heuristic 1
+    let entropy = -freq
+        .values()
+        .map(|&x| (x as f64) / (ONE_KB as f64))
+        .map(|p| p * p.log2())
+        .sum::<f64>();
+    let log2_alphabet = (freq.len() as f64).log2();
+
+    let proximity = 1f64 - (((entropy / log2_alphabet) - 1f64).abs());
+    preference += if proximity > 0.75 {
+        proximity
+    } else {
+        0.5 * proximity
+    };
+
+    // Heuristic 2
+    let mut sorted = freq.values().copied().collect::<Vec<_>>();
+    sorted.sort_unstable();
+    let max_idx = 5.min(sorted.len());
+    let proportion =
+        (sorted[..max_idx].iter().sum::<u32>() as f64) / (ONE_KB as f64);
+    preference -= if proportion > 0.5 {
+        proportion
+    } else {
+        0.5 * proportion
+    };
+
+    if preference > 0.1 {
+        compress_fixed(writer, data);
+    } else if preference < -0.1 {
+        compress_dynamic(writer, data);
+    } else {
+        // Heuristic 3
+        let unique_chars = freq.len() as f64;
+        let data_len = data.len() as f64;
+        let log2_data_len = data_len.log2();
+        let estimated_ratio = unique_chars * log2_data_len / data_len;
+
+        if estimated_ratio < 0.5 {
+            compress_dynamic(writer, data);
+        } else {
+            compress_fixed(writer, data);
+        }
+    }
 }
 
 #[allow(clippy::cast_possible_truncation)]
