@@ -42,7 +42,7 @@ To use this in your project, you can add it as a git dependency in your `Cargo.t
 
 ```toml
 [dependencies]
-zlib = { git = "https://github.com/mkpro118/zlib", version = "0.1.0" }
+zlib = { git = "https://github.com/mkpro118/zlib", version = "0.1.1" }
 ```
 
 ## Usage
