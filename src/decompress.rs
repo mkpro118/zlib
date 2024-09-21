@@ -312,7 +312,7 @@ mod tests {
             // First 4 bytes are metadata, rest is the decompressed string
             let decompressed = match std::str::from_utf8(&compressed[4..]) {
                 Ok(v) => v,
-                Err(e) => panic!("Invalid UTF-8 sequence: {}", e),
+                Err(e) => panic!("Invalid UTF-8 sequence: {e}"),
             };
 
             let mut reader = BitReader::new(compressed);
@@ -322,7 +322,7 @@ mod tests {
 
             let s = match std::str::from_utf8(&buffer) {
                 Ok(v) => v,
-                Err(e) => panic!("Invalid UTF-8 sequence: {}", e),
+                Err(e) => panic!("Invalid UTF-8 sequence: {e}"),
             };
 
             assert_eq!(decompressed, s);
@@ -395,12 +395,14 @@ mod tests {
         );
 
         assert_eq!(buffer.len(), 4);
-        assert_eq!(buffer, &[b'A', b'B', b'A', b'C']);
+        assert_eq!(buffer, b"ABAC");
     }
 
     #[test]
     #[allow(clippy::unusual_byte_groupings)]
     fn test_inflate_block_data_distance() {
+        struct TestData(usize, usize, usize, &'static [u8]);
+
         let mut literal_tree = HuffmanTree::new();
         let mut distance_tree = HuffmanTree::new();
 
@@ -418,29 +420,17 @@ mod tests {
         distance_tree.insert(0b0, 1, 1 as char);
         distance_tree.insert(0b110, 3, 2 as char);
 
-        struct TestData(usize, usize, usize, &'static [u8]);
-
         let data = [
             // A B A 257 0 *END*
             // This should repeat the last A 3 more times, overall, "ABAAAA"
-            TestData(
-                0b10_0_10_110_10_111,
-                13,
-                6,
-                &[b'A', b'B', b'A', b'A', b'A', b'A'],
-            ),
+            TestData(0b10_0_10_110_10_111, 13, 6, b"ABAAAA"),
             // A B 257 1 *END*
             // This should repeat the "AB" once, and end with an "A",
             // overall, "ABABA"
-            TestData(0b10_0_110_0_111, 10, 5, &[b'A', b'B', b'A', b'B', b'A']),
+            TestData(0b10_0_110_0_111, 10, 5, b"ABABA"),
             // A B A 257 2 *END*
             // This should repeat the "ABA" once, overall, "ABAABA"
-            TestData(
-                0b10_0_10_110_110_111,
-                14,
-                6,
-                &[b'A', b'B', b'A', b'A', b'B', b'A'],
-            ),
+            TestData(0b10_0_10_110_110_111, 14, 6, b"ABAABA"),
         ];
 
         for TestData(code, length, exp_len, exp_seq) in data {
